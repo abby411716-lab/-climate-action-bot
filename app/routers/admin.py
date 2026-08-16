@@ -40,3 +40,18 @@ def list_schools(db: Session = Depends(get_db)):
         {"school_id": s.school_id, "school_name": s.school_name, "join_link_code": s.join_link_code}
         for s in crud.list_schools(db)
     ]
+
+
+class SchoolUpdate(BaseModel):
+    school_name: str
+
+
+@router.patch("/schools/{school_id}", dependencies=[Depends(require_admin_key)])
+def update_school(school_id: int, payload: SchoolUpdate, db: Session = Depends(get_db)):
+    school = crud.get_school_by_id(db, school_id)
+    if not school:
+        raise HTTPException(status_code=404, detail="School not found")
+    school.school_name = payload.school_name
+    db.commit()
+    db.refresh(school)
+    return {"school_id": school.school_id, "school_name": school.school_name}
