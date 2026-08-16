@@ -42,6 +42,18 @@ uvicorn app.main:app --reload
   - `postback` 事件：處理學生點選學校按鈕後的歸校
   - 文字訊息：若尚未歸校則詢問學校，已歸校則回覆目前積分／連續天數／徽章（先用資料庫現有欄位回覆，尚未接上每日推送與答題邏輯）
 
+## 管理用 API（暫時性，用於雲端環境沒有 Shell 可下指令時建立學校）
+
+`POST /admin/schools`、`GET /admin/schools`，需帶 Header `X-Admin-Key: <ADMIN_API_KEY>`。範例：
+
+```
+POST https://climate-action-bot.onrender.com/admin/schools
+Header: X-Admin-Key: <你的 ADMIN_API_KEY>
+Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
+```
+
+之後有正式教師後台可以管理學校資料時，這個端點可以移除。
+
 ## 部署到 Render（測試用）
 
 專案根目錄已附 `render.yaml`，可用 Render 的 Blueprint 功能一鍵建立服務：
