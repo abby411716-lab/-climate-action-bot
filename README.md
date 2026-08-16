@@ -42,6 +42,18 @@ uvicorn app.main:app --reload
   - `postback` 事件：處理學生點選學校按鈕後的歸校
   - 文字訊息：若尚未歸校則詢問學校，已歸校則回覆目前積分／連續天數／徽章（先用資料庫現有欄位回覆，尚未接上每日推送與答題邏輯）
 
+## 部署到 Render（測試用）
+
+專案根目錄已附 `render.yaml`，可用 Render 的 Blueprint 功能一鍵建立服務：
+
+1. 到 [Render Dashboard](https://dashboard.render.com) → New → Blueprint，選這個 GitHub repo
+2. Render 會讀取 `render.yaml` 自動建立 Web Service，建置指令與啟動指令都已寫好
+3. 部署頁面會要求填入標記 `sync: false` 的環境變數：`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`（值同你本機 `.env` 內的內容）
+4. 部署完成後會拿到一個固定網址，例如 `https://climate-action-bot.onrender.com`
+5. 到 LINE Developers Console → Messaging API 頁籤，把 Webhook URL 設成 `https://climate-action-bot.onrender.com/webhook`，按 Verify 確認成功，並開啟「Use webhook」
+
+**注意**：Render 免費方案的檔案系統是暫存的（每次重新部署或服務休眠喚醒都可能清空），目前用的 SQLite 資料庫在免費方案上不適合長期保存正式資料，僅供功能測試；之後正式上線前建議換成 Render 提供的 PostgreSQL（免費方案有時數限制）或其他持久化資料庫。免費方案服務閒置一段時間會休眠，第一個請求可能要等數十秒喚醒，LINE 平台通常會重試 webhook，不影響功能但體驗上第一次互動可能稍慢。
+
 ## 尚未完成（規格書第 10 節後續步驟）
 
 1. 每日推送＋答題＋積分/streak/徽章核心邏輯（目前欄位已建好但沒有寫入邏輯）
