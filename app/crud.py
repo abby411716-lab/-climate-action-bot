@@ -1,3 +1,4 @@
+from sqlalchemy import nullslast
 from sqlalchemy.orm import Session
 
 from app import models
@@ -38,4 +39,159 @@ def get_or_create_student(db: Session, line_user_id: str, school_id: int | None 
     student = get_student_by_line_id(db, line_user_id)
     if student is None:
         student = create_student(db, line_user_id, school_id)
+    return student
+
+
+def get_student_by_id(db: Session, student_id: int) -> models.Student | None:
+    return db.query(models.Student).filter(models.Student.student_id == student_id).first()
+
+
+def set_student_nickname(db: Session, student: models.Student, nickname: str) -> models.Student:
+    student.nickname = nickname
+    db.commit()
+    db.refresh(student)
+    return student
+
+
+def get_leaderboard(db: Session, school_id: int, limit: int = 10) -> list[models.Student]:
+    return (
+        db.query(models.Student)
+        .filter(models.Student.school_id == school_id, models.Student.nickname.isnot(None))
+        .order_by(models.Student.total_points.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def create_eco_checkin(
+    db: Session, student_id: int, line_message_id: str, image_data: bytes, image_mime: str
+) -> models.EcoCheckin:
+    checkin = models.EcoCheckin(
+        student_id=student_id,
+        line_message_id=line_message_id,
+        image_data=image_data,
+        image_mime=image_mime,
+    )
+    db.add(checkin)
+    db.commit()
+    db.refresh(checkin)
+    return checkin
+
+
+def get_eco_checkin_by_id(db: Session, checkin_id: int) -> models.EcoCheckin | None:
+    return db.query(models.EcoCheckin).filter(models.EcoCheckin.checkin_id == checkin_id).first()
+
+
+def list_eco_checkins(db: Session, status: str | None = None) -> list[models.EcoCheckin]:
+    query = db.query(models.EcoCheckin)
+    if status:
+        query = query.filter(models.EcoCheckin.status == status)
+    return query.order_by(models.EcoCheckin.submitted_at.desc()).all()
+
+
+def count_approved_checkins(db: Session, student_id: int) -> int:
+    return (
+        db.query(models.EcoCheckin)
+        .filter(models.EcoCheckin.student_id == student_id, models.EcoCheckin.status == "approved")
+        .count()
+    )
+
+
+def finalize_eco_checkin(
+    db: Session, checkin: models.EcoCheckin, *, status: str, points_awarded: int
+) -> models.EcoCheckin:
+    checkin.status = status
+    checkin.points_awarded = points_awarded
+    checkin.reviewed_at = models.utcnow()
+    db.commit()
+    db.refresh(checkin)
+    return checkin
+
+
+def get_question_by_id(db: Session, question_id: int) -> models.Question | None:
+    return db.query(models.Question).filter(models.Question.question_id == question_id).first()
+
+
+def get_next_unpushed_question(db: Session) -> models.Question | None:
+    """依 scheduled_date 排序（沒設定的排最後），取尚未推送過的下一題。"""
+    pushed_ids = db.query(models.DailyPush.question_id)
+    return (
+        db.query(models.Question)
+        .filter(~models.Question.question_id.in_(pushed_ids))
+        .order_by(nullslast(models.Question.scheduled_date), models.Question.question_id)
+        .first()
+    )
+
+
+def get_latest_daily_push(db: Session) -> models.DailyPush | None:
+    return db.query(models.DailyPush).order_by(models.DailyPush.pushed_at.desc()).first()
+
+
+def record_daily_push(db: Session, question_id: int) -> models.DailyPush:
+    push = models.DailyPush(question_id=question_id)
+    db.add(push)
+    db.commit()
+    db.refresh(push)
+    return push
+
+
+def get_answer_log(db: Session, student_id: int, question_id: int) -> models.AnswerLog | None:
+    return (
+        db.query(models.AnswerLog)
+        .filter(models.AnswerLog.student_id == student_id, models.AnswerLog.question_id == question_id)
+        .first()
+    )
+
+
+def get_latest_answer_log(db: Session, student_id: int) -> models.AnswerLog | None:
+    return (
+        db.query(models.AnswerLog)
+        .filter(models.AnswerLog.student_id == student_id)
+        .order_by(models.AnswerLog.answered_at.desc())
+        .first()
+    )
+
+
+def count_correct_answers(db: Session, student_id: int) -> int:
+    return (
+        db.query(models.AnswerLog)
+        .filter(models.AnswerLog.student_id == student_id, models.AnswerLog.is_correct.is_(True))
+        .count()
+    )
+
+
+def count_answers(db: Session, student_id: int) -> int:
+    return db.query(models.AnswerLog).filter(models.AnswerLog.student_id == student_id).count()
+
+
+def create_answer_log(
+    db: Session, student_id: int, question_id: int, selected_option: str, is_correct: bool
+) -> models.AnswerLog:
+    log = models.AnswerLog(
+        student_id=student_id,
+        question_id=question_id,
+        selected_option=selected_option,
+        is_correct=is_correct,
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return log
+
+
+def save_student_progress(
+    db: Session,
+    student: models.Student,
+    *,
+    total_points: int,
+    current_streak: int,
+    longest_streak: int,
+    badges: list[str],
+) -> models.Student:
+    student.total_points = total_points
+    student.current_streak = current_streak
+    student.longest_streak = longest_streak
+    student.badges = badges
+    db.commit()
+    db.refresh(student)
     return student

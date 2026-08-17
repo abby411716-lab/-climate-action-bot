@@ -1,6 +1,6 @@
 # 氣候行動學習互動網站
 
-依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷）。
+依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）。
 
 ## 環境設定
 
@@ -36,11 +36,39 @@ uvicorn app.main:app --reload
 
 ## 目前功能
 
-- `schools / students / questions / answer_logs / assessment_responses` 五張表（`app/models.py`），對應規格書第 2 節設計
+- `schools / students / questions / answer_logs / assessment_responses / daily_pushes` 六張表（`app/models.py`），對應規格書第 2 節設計；`daily_pushes` 是新增的推送紀錄表，用來決定下一次要推哪一題、避免同一天重複推送
 - LINE webhook（`app/routers/webhook.py`）：
   - `follow` 事件：學生加好友時建立 `students` 資料；若加好友連結有帶 `school` 參數則自動歸校，否則以 Quick Reply 按鈕請學生手動選擇學校（規格書第 3 節的保險機制）
-  - `postback` 事件：處理學生點選學校按鈕後的歸校
-  - 文字訊息：若尚未歸校則詢問學校，已歸校則回覆目前積分／連續天數／徽章（先用資料庫現有欄位回覆，尚未接上每日推送與答題邏輯）
+  - `postback` 事件：處理學生點選學校按鈕後的歸校，以及點選測驗選項後的答題（`answer|question_id|option_index` 格式）
+  - 文字訊息：若尚未歸校則詢問學校，已歸校則回覆目前身分／能量／連續天數／徽章
+- 每日推送＋答題＋積分/streak/徽章（規格書第 10 節第 2 步）：
+  - `app/scheduler.py`：程式啟動時用 APScheduler 在背景排程，每天 Asia/Taipei 08:00 自動推送當日題目（`push_daily_question`）
+  - `app/daily_push.py`：依 `questions.scheduled_date` 排序（沒設定日期的排最後）取出「尚未推送過」的下一題，用 LINE Broadcast API 一次推給所有好友（知識卡 + 測驗，測驗選項做成 Quick Reply 按鈕）；同一天已推送過就不會再推
+  - 學生點選答案後（`app/routers/webhook.py` 的 `_handle_answer_postback`）：寫入 `answer_logs`（同一題只能答一次），更新 `students.total_points / current_streak / longest_streak / badges`
+  - `app/game_rules.py`：積分／連續天數／徽章／稱號的規則都集中在這裡（規格書沒有寫死細節，這是我先訂的一版合理規則，可依需求調整數值）：
+    - 答對 +10、答錯 +2（給少量參與分數鼓勵持續作答）
+    - 連續天數：以 Asia/Taipei 的日期為準，今天已經答過就不重複累計、昨天有答則 +1、中間斷過則歸 1 重新開始
+    - 故事線：學生是「氣候行動守護者」，依累積能量從 🌱 幼苗守護者 → 🌿 綠芽行動家 → 🌳 森林守護者 → 🌍 地球衛士 → ⭐ 氣候英雄 逐步升級，每個階段都有對應的故事文案
+    - 徽章：首次答題／首次答對／連續 3、7、30 天／累計答對 10、30 題／累積能量達 300，達成條件就解鎖，回覆訊息會附上「解鎖新徽章」提示
+  - 手動測試用：`POST /admin/push-daily`（帶 `X-Admin-Key`，可加 `?force=true` 略過「今天已推送過」的檢查）可以不用等到 08:00 就手動觸發一次推送
+  - `python -m scripts.seed_question` 可以建立一筆測試題目，方便本機測試整套流程
+  - **注意**：Render 免費方案的 Web Service 閒置一段時間會休眠，休眠期間內建的 APScheduler 排程不會執行；規格書第 10 節第 4 步（外部 cron）之後可以改用 Render 付費 Cron Job 或外部服務定時呼叫 `/admin/push-daily` 來取代或搭配這個內建排程
+
+## Rich Menu ＋ 暱稱 ＋ 環保打卡 ＋ 排行榜
+
+- `python -m scripts.setup_rich_menu`：產生一張 2500x1686、2x2 四宮格的選單圖片（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。四個按鈕都是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理：
+  - `基本資料`：回覆就讀學校
+  - `目前狀態`：回覆身分／能量／連續天數／徽章（跟文字訊息查詢共用 `_status_text`）
+  - `環保打卡`：回覆打卡說明（實際打卡是直接傳照片，不是點按鈕）
+  - `排行榜`：回覆該校前 10 名（暱稱＋能量）
+- 暱稱設定：學生選完學校後，下一則文字訊息會被當成暱稱存起來（`students.nickname`），設定前選單功能會提示要先設定暱稱。暱稱只存在我們資料庫，跟 LINE 顯示名稱無關，目的是排行榜不曝露 LINE 身份。
+- 環保打卡（`app/eco_checkin.py` + `students` 傳圖片訊息）：學生傳照片給 bot → 用 LINE Blob API 下載原圖 → 用 Pillow 壓縮成長邊 ≤1000px、JPEG quality 70 → 存進新的 `eco_checkins` 表（`status="pending"`）。**設計上刻意先審核再發能量**：
+  - `GET /admin/checkins?status=pending`（帶 `X-Admin-Key`）：列出待審核打卡，含 `image_url` 可直接開圖
+  - `GET /admin/checkins/{id}/image`：回傳圖片本身，因為要給老師直接在瀏覽器開連結看照片，所以這個端點例外允許用網址參數 `?admin_key=` 代替 Header（其他 admin 端點都只認 Header）——僅限這個用途，網址會留在瀏覽器歷史/伺服器 log，不要外流
+  - `POST /admin/checkins/{id}/approve`（可帶 `?points=`，預設 `game_rules.ECO_CHECKIN_POINTS=15`）：發放能量、檢查是否解鎖 `eco_first`／`eco_10` 徽章，並用 LINE Push Message 通知學生
+  - `POST /admin/checkins/{id}/reject`：標記未通過，Push 通知學生可以再試一次
+  - 打卡目前**不影響**每日答題的連續天數（streak 只跟每日測驗有關）
+- **這只是「碳足跡計算器」裡「拍照打卡送分」的 bonus 版**；真正會計算數值的碳足跡問卷（規格書時程表 W2-3 上線那條線）還沒做，之後要做再另外討論
 
 ## 管理用 API（暫時性，用於雲端環境沒有 Shell 可下指令時建立學校）
 
@@ -70,10 +98,17 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 每日推送＋答題＋積分/streak/徽章核心邏輯（目前欄位已建好但沒有寫入邏輯）
-2. 成效評估問卷（LIFF 表單）＋排程推送
-3. 教師後台（總覽、個別學生頁、題目分析、成效總覽）
-4. 排程任務（cron）：每日推送、依週次觸發成效評估
+1. 成效評估問卷（LIFF 表單）＋排程推送
+2. 教師後台（總覽、個別學生頁、題目分析、成效總覽；目前只有 `/admin/checkins` 系列陽春 API，沒有網頁介面）
+3. 正式題庫建置（目前只有 `scripts/seed_question.py` 建立的測試題目，需要依規格書內容建置完整每日題庫並排定 `scheduled_date`）
+4. 更穩定的排程機制（目前是程式內建 APScheduler，Render 免費方案休眠時不會執行，見上方注意事項）
+5. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
+
+## ⚠️ 部署前必看：這次改了資料庫 schema
+
+這次新增了 `students.nickname` 欄位跟 `eco_checkins` 表。`Base.metadata.create_all()`（`app/main.py`）只會建立**還不存在**的新表，**不會**幫已存在的 `students` 表補欄位。專案目前沒有導入 Alembic 之類的 migration 工具，本機開發都是直接刪掉 `climate_action.db` 重建。
+
+上線到 Render 的 Postgres 前，因為目前還在測試階段、還沒有正式學生資料，建議直接把 Render 那個 Postgres 資料庫清空重建（或找 Render 的重置資料庫功能）讓它照新的 `app/models.py` 重新產生 schema；等到有正式資料之後如果還要改 schema，就需要另外處理 migration，不能再用清空重建。
 
 ## 關於加好友連結帶入學校參數
 

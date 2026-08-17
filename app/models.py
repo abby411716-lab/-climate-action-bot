@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,6 +28,7 @@ class Student(Base):
     line_user_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.school_id"), nullable=True)
     class_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    nickname: Mapped[str | None] = mapped_column(String(50), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     current_streak: Mapped[int] = mapped_column(Integer, default=0)
     longest_streak: Mapped[int] = mapped_column(Integer, default=0)
@@ -37,6 +38,7 @@ class Student(Base):
     school: Mapped["School | None"] = relationship(back_populates="students")
     answer_logs: Mapped[list["AnswerLog"]] = relationship(back_populates="student")
     assessment_responses: Mapped[list["AssessmentResponse"]] = relationship(back_populates="student")
+    eco_checkins: Mapped[list["EcoCheckin"]] = relationship(back_populates="student")
 
 
 class Question(Base):
@@ -66,6 +68,34 @@ class AnswerLog(Base):
 
     student: Mapped["Student"] = relationship(back_populates="answer_logs")
     question: Mapped["Question"] = relationship(back_populates="answer_logs")
+
+
+class DailyPush(Base):
+    """每次「每日推送」實際送出的題目紀錄，用來決定下一次要推哪一題、避免同一天重複推送。"""
+
+    __tablename__ = "daily_pushes"
+
+    push_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("questions.question_id"), unique=True, nullable=False)
+    pushed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EcoCheckin(Base):
+    """學生拍照打卡的環保行動，需經老師審核通過才會實際發放能量／徽章。"""
+
+    __tablename__ = "eco_checkins"
+
+    checkin_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.student_id"), nullable=False)
+    line_message_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    image_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    image_mime: Mapped[str] = mapped_column(String(50), default="image/jpeg")
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending / approved / rejected
+    points_awarded: Mapped[int] = mapped_column(Integer, default=0)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    student: Mapped["Student"] = relationship(back_populates="eco_checkins")
 
 
 class AssessmentResponse(Base):

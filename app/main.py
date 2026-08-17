@@ -1,11 +1,21 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.database import Base, engine
 from app.routers import admin, webhook
+from app.scheduler import start_scheduler
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="氣候行動學習互動網站 API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+
+
+app = FastAPI(title="氣候行動學習互動網站 API", lifespan=lifespan)
 app.include_router(webhook.router)
 app.include_router(admin.router)
 
