@@ -187,6 +187,33 @@ def create_answer_log(
     return log
 
 
+def upsert_assessment_response(
+    db: Session, student: models.Student, assessment_round: str, responses: dict
+) -> models.AssessmentResponse:
+    """新增或覆蓋（同一學生同一輪次只留一筆，重填會覆蓋掉舊答案）某一輪問卷的回答。"""
+    existing = (
+        db.query(models.AssessmentResponse)
+        .filter(
+            models.AssessmentResponse.student_id == student.student_id,
+            models.AssessmentResponse.assessment_round == assessment_round,
+        )
+        .first()
+    )
+    if existing:
+        existing.responses = responses
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    response = models.AssessmentResponse(
+        student_id=student.student_id, assessment_round=assessment_round, responses=responses
+    )
+    db.add(response)
+    db.commit()
+    db.refresh(response)
+    return response
+
+
 def save_student_progress(
     db: Session,
     student: models.Student,

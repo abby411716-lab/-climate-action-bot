@@ -4,7 +4,8 @@ from linebot.v3.messaging import PushMessageRequest, TextMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app import crud, eco_checkin, game_rules
+from app import assessment_questions, crud, eco_checkin, game_rules
+from app.assessment import broadcast_assessment_invite
 from app.config import settings
 from app.daily_push import push_daily_question
 from app.database import get_db
@@ -66,6 +67,15 @@ def trigger_daily_push(force: bool = False):
     """手動觸發一次每日推送，測試用（正式排程見 app/scheduler.py，每天 08:00 Asia/Taipei 自動執行）。"""
     push_daily_question(force=force)
     return {"status": "triggered", "force": force}
+
+
+@router.post("/push-assessment", dependencies=[Depends(require_admin_key)])
+def trigger_assessment_push(round: str):
+    """廣播成效評估問卷連結給所有好友。round 傳 baseline / midterm / posttest。"""
+    if round not in assessment_questions.ROUNDS:
+        raise HTTPException(status_code=400, detail="round 必須是 baseline / midterm / posttest")
+    broadcast_assessment_invite(round)
+    return {"status": "triggered", "round": round}
 
 
 @router.get("/checkins", dependencies=[Depends(require_admin_key)])

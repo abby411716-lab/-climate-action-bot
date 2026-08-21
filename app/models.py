@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -29,6 +29,8 @@ class Student(Base):
     school_id: Mapped[int | None] = mapped_column(ForeignKey("schools.school_id"), nullable=True)
     class_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     nickname: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    grade: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     current_streak: Mapped[int] = mapped_column(Integer, default=0)
     longest_streak: Mapped[int] = mapped_column(Integer, default=0)
@@ -99,13 +101,21 @@ class EcoCheckin(Base):
 
 
 class AssessmentResponse(Base):
+    """學生對某一輪成效評估問卷（baseline／midterm／posttest）的回答。
+
+    問卷本身沒有標準答案（自我評估／態度／行為題），跟每日測驗的客觀對錯（answer_logs）
+    是分開的兩種資料，所以這裡不像 Question 那樣有 correct_option／score 的概念，
+    全部題目的回答都存在 responses 這個 JSON 欄位裡，key 是題目代碼（見 app/assessment_questions.py）。
+    """
+
     __tablename__ = "assessment_responses"
+    __table_args__ = (UniqueConstraint("student_id", "assessment_round", name="uq_assessment_student_round"),)
 
     response_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.student_id"), nullable=False)
     assessment_round: Mapped[str] = mapped_column(String(50), nullable=False)
-    knowledge_score: Mapped[int] = mapped_column(Integer, nullable=False)
-    action_responses: Mapped[dict] = mapped_column(JSON, nullable=False)
+    responses: Mapped[dict] = mapped_column(JSON, nullable=False)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     student: Mapped["Student"] = relationship(back_populates="assessment_responses")

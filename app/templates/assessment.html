@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ round_label }}問卷</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 16px 48px;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: #f5f7f5; color: #1f2a1f;
+  }
+  h1 { font-size: 1.3rem; margin: 8px 0 4px; }
+  p.intro { color: #4a5a4a; font-size: 0.9rem; margin-bottom: 20px; }
+  .question { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .question p.label { font-weight: 600; margin: 0 0 10px; line-height: 1.5; }
+  .options label { display: block; padding: 10px 12px; margin-bottom: 6px; border: 1px solid #d8e0d8; border-radius: 8px; cursor: pointer; }
+  .options label:has(input:checked) { border-color: #2f7a3f; background: #eef7ee; }
+  .options input { margin-right: 8px; }
+  .scale-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .scale-row .end-label { font-size: 0.75rem; color: #667066; width: 64px; }
+  .scale-row .end-label.right { text-align: right; }
+  .scale-options { display: flex; gap: 8px; flex: 1; justify-content: center; }
+  .scale-options label { display: flex; flex-direction: column; align-items: center; font-size: 0.8rem; cursor: pointer; }
+  .scale-options input { width: 22px; height: 22px; margin: 0 0 2px; }
+  textarea { width: 100%; min-height: 70px; border: 1px solid #d8e0d8; border-radius: 8px; padding: 10px; font-size: 0.95rem; font-family: inherit; }
+  .max-select-hint { font-size: 0.75rem; color: #8a948a; margin-top: 4px; }
+  button#submit-btn {
+    width: 100%; padding: 14px; font-size: 1rem; font-weight: 600;
+    background: #2f7a3f; color: #fff; border: none; border-radius: 10px; margin-top: 8px;
+  }
+  button#submit-btn:disabled { background: #a8b8a8; }
+  #status { margin-top: 16px; padding: 14px; border-radius: 10px; display: none; }
+  #status.error { display: block; background: #fdecec; color: #a3231f; }
+  #status.success { display: block; background: #eef7ee; color: #1f5c2b; }
+  #loading { text-align: center; padding: 40px 0; color: #667066; }
+</style>
+</head>
+<body>
+
+<div id="loading">載入中…</div>
+
+<div id="form-wrap" style="display:none">
+  <h1>{{ round_label }}問卷</h1>
+  <p class="intro">這份問卷不會顯示你的姓名或帳號，僅用於了解大家在氣候行動上的變化，請依真實感受填答，填答時間約 3~5 分鐘。</p>
+
+  <form id="assessment-form">
+    {% for q in questions %}
+    <div class="question" data-key="{{ q.key }}" data-type="{{ q.type }}" {% if q.max_select %}data-max-select="{{ q.max_select }}"{% endif %}>
+      <p class="label">{{ q.text }}</p>
+
+      {% if q.type == "single_choice" %}
+      <div class="options">
+        {% for value, opt_label in q.options %}
+        <label><input type="radio" name="{{ q.key }}" value="{{ value }}"> {{ opt_label }}</label>
+        {% endfor %}
+      </div>
+
+      {% elif q.type == "multi_choice" %}
+      <div class="options">
+        {% for value, opt_label in q.options %}
+        <label><input type="checkbox" name="{{ q.key }}" value="{{ value }}"> {{ opt_label }}</label>
+        {% endfor %}
+      </div>
+      {% if q.max_select %}<p class="max-select-hint">最多選 {{ q.max_select }} 項</p>{% endif %}
+
+      {% elif q.type == "scale" %}
+      <div class="scale-row">
+        <span class="end-label">{{ q.low_label }}</span>
+        <div class="scale-options">
+          {% for n in [1,2,3,4,5] %}
+          <label><input type="radio" name="{{ q.key }}" value="{{ n }}">{{ n }}</label>
+          {% endfor %}
+        </div>
+        <span class="end-label right">{{ q.high_label }}</span>
+      </div>
+
+      {% elif q.type == "short_text" %}
+      <textarea name="{{ q.key }}" maxlength="{{ q.max_length or 200 }}"></textarea>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <button type="submit" id="submit-btn">送出問卷</button>
+    <div id="status"></div>
+  </form>
+</div>
+
+<script>
+const LIFF_ID = "{{ liff_id }}";
+const ASSESSMENT_ROUND = "{{ assessment_round }}";
+
+function collectAnswers() {
+  const form = document.getElementById("assessment-form");
+  const answers = {};
+  document.querySelectorAll(".question").forEach(qEl => {
+    const key = qEl.dataset.key;
+    const type = qEl.dataset.type;
+    if (type === "single_choice" || type === "scale") {
+      const checked = form.querySelector(`input[name="${key}"]:checked`);
+      if (checked) answers[key] = checked.value;
+    } else if (type === "multi_choice") {
+      const checked = [...form.querySelectorAll(`input[name="${key}"]:checked`)].map(el => el.value);
+      if (checked.length) answers[key] = checked;
+    } else if (type === "short_text") {
+      const val = form.querySelector(`textarea[name="${key}"]`).value.trim();
+      if (val) answers[key] = val;
+    }
+  });
+  return answers;
+}
+
+function enforceMaxSelect() {
+  document.querySelectorAll(".question[data-max-select]").forEach(qEl => {
+    const max = parseInt(qEl.dataset.maxSelect, 10);
+    const boxes = qEl.querySelectorAll('input[type="checkbox"]');
+    boxes.forEach(box => {
+      box.addEventListener("change", () => {
+        const checkedCount = qEl.querySelectorAll('input[type="checkbox"]:checked').length;
+        boxes.forEach(b => { if (!b.checked) b.disabled = checkedCount >= max; });
+      });
+    });
+  });
+}
+
+function showStatus(message, isError) {
+  const el = document.getElementById("status");
+  el.textContent = message;
+  el.className = isError ? "error" : "success";
+}
+
+async function submitAnswers(accessToken) {
+  const answers = collectAnswers();
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  btn.textContent = "送出中…";
+
+  try {
+    const res = await fetch("/liff/assessment/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assessment_round: ASSESSMENT_ROUND,
+        access_token: accessToken,
+        answers: answers,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showStatus(data.detail || "送出失敗，請確認每一題都填答後再試一次", true);
+      btn.disabled = false;
+      btn.textContent = "送出問卷";
+      return;
+    }
+    showStatus("問卷已送出，感謝你的填答！", false);
+    document.getElementById("submit-btn").style.display = "none";
+    setTimeout(() => { if (liff.isInClient()) liff.closeWindow(); }, 1500);
+  } catch (err) {
+    showStatus("網路連線異常，請稍後再試一次", true);
+    btn.disabled = false;
+    btn.textContent = "送出問卷";
+  }
+}
+
+async function init() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("form-wrap").style.display = "block";
+    enforceMaxSelect();
+
+    document.getElementById("assessment-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const accessToken = liff.getAccessToken();
+      await submitAnswers(accessToken);
+    });
+  } catch (err) {
+    document.getElementById("loading").textContent = "初始化失敗，請透過 LINE 開啟這個連結再試一次。";
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -103,12 +103,22 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 （本專案一開始用本機 SQLite 起步是延續規格書第 7 節的建議，但實測發現 Render 免費方案的 Web Service 檔案系統在服務休眠喚醒時會重置，SQLite 檔案跟著消失，所以提早換成 PostgreSQL；本機開發若不想裝 PostgreSQL，`DATABASE_URL` 留空或設回 `sqlite:///./climate_action.db` 仍可用 SQLite。）
 
+## 成效評估問卷（LIFF 表單）
+
+前測（baseline）／中測（midterm）／後測（posttest）三輪問卷，題目改編自使用者提供的「青少年氣候行為調查」（教育部青年發展署 Young 飛計畫），內容是自我覺察／態度／行為／動機題（沒有標準答案），跟每日測驗的客觀對錯（`answer_logs`）是分開的兩種資料。
+
+- `app/assessment_questions.py`：題目定義（`QUESTION_DEFS`）跟每輪要問哪些題（`ROUNDS`）都在這裡集中管理，改題目或調整輪次內容只需要改這個檔案。核心題三輪都問（可以畫出同一個學生的前中後變化曲線）；年級/性別只在前測問一次（存進 `students.grade` / `students.gender`，不會每輪都問）；障礙/激勵題前測中測問「介入前」版本，後測換成「介入後」回顧版本；後測額外加課程整體滿意度、自評成長、開放式回饋
+- `app/templates/assessment.html` + `app/routers/liff.py`：`GET /liff/assessment?round=baseline|midterm|posttest` 用 Jinja2 依 `assessment_questions.py` 的定義動態產生表單頁面，內嵌 LIFF SDK；`POST /liff/assessment/submit` 收表單送出的答案
+- **身份識別但不顯示**：表單本身不問姓名/帳號（維持匿名體感），但後端會用 `liff.getAccessToken()` 拿到的 access token 呼叫 LINE 的 `GET /v2/profile`（`app/line_client.get_liff_user_id`）換回經過驗證的 `userId`，藉此對應到 `students` 表裡的學生——**刻意不信任前端回傳的任何身份欄位**，因為 `liff.getProfile()` 這類前端呼叫的結果理論上可能被竄改，只有後端自己拿 token 去跟 LINE 換到的 userId 才可信
+- 同一個學生同一輪次重複送出，會覆蓋掉舊答案（`crud.upsert_assessment_response`，靠 `assessment_responses` 的 `(student_id, assessment_round)` unique constraint 判斷）
+- 推播問卷連結：`POST /admin/push-assessment?round=baseline`（帶 `X-Admin-Key`）廣播問卷連結給所有好友。跟每日測驗不同，前測/中測/後測只知道「哪一週」要發（見下方行程），沒有精確到哪一天，所以做成手動觸發，由管理員自己挑那一週裡的哪一天發送
+- **LIFF App 設定**：LIFF App 是掛在獨立的 LINE Login channel 底下（LINE 現在不允許 LIFF 直接掛在 Messaging API channel），LIFF ID 存在 `.env` 的 `LIFF_ID`。LIFF App 的 **Endpoint URL** 要設成 `https://climate-action-bot.onrender.com/liff/assessment`（本機測試則設本機的 ngrok 網址 + `/liff/assessment`），`round` 參數會由 `https://liff.line.me/{LIFF_ID}?round=baseline` 這種連結自動透傳過去，不用另外設定
+
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 成效評估問卷（LIFF 表單）＋排程推送（下一個要做的項目；需要先在 LINE Developers Console 建立 LIFF App）
-2. 教師後台（總覽、個別學生頁、題目分析、成效總覽；目前只有 `/admin/checkins` 系列陽春 API，沒有網頁介面）
-3. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
-4. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週，不推送題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步進行中測（題庫本身沒有涵蓋，屬另外的評估問卷）；11/3 那週為 Round3 後測，題庫本身也沒有涵蓋（前測／中測／後測問卷屬於上方第 1 點「成效評估問卷」，還沒開發）。Round2 結束後題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
+1. 教師後台（總覽、個別學生頁、題目分析、成效總覽；目前只有 `/admin/checkins` 系列陽春 API，沒有網頁介面）
+2. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
+3. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週，不推送題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步進行中測（題庫本身沒有涵蓋，屬另外的評估問卷）；11/3 那週為 Round3 後測，題庫本身也沒有涵蓋（前測／中測／後測問卷屬於上方第 1 點「成效評估問卷」，還沒開發）。Round2 結束後題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）
 
