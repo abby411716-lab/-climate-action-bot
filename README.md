@@ -1,6 +1,13 @@
 # 氣候行動學習互動網站
 
-依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）。
+依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援，以及前測/中測/後測成效評估問卷（LIFF 表單）。
+
+## 目前進度快照（2026-08-21）
+
+- ✅ 30 題正式題庫已排定實際發送日期（見下方「每日推送」），本機／Render 兩邊資料庫同步
+- ✅ 每日推送排程雙保險：服務內建 APScheduler ＋ GitHub Actions 外部 cron，已各自手動觸發驗證成功
+- ✅ 成效評估問卷（LIFF 表單）：前測/中測/後測三輪，已部署上線並在真實裝置上完整測試過一輪，可正常送出
+- ⏭️ 下一步：教師後台、真正的碳足跡計算器（見下方「尚未完成」）
 
 ## 環境設定
 
@@ -119,7 +126,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 1. 教師後台（總覽、個別學生頁、題目分析、成效總覽；目前只有 `/admin/checkins` 系列陽春 API，沒有網頁介面）
 2. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
-3. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週，不推送題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步進行中測（題庫本身沒有涵蓋，屬另外的評估問卷）；11/3 那週為 Round3 後測，題庫本身也沒有涵蓋（前測／中測／後測問卷屬於上方第 1 點「成效評估問卷」，還沒開發）。Round2 結束後題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
+3. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）
 
