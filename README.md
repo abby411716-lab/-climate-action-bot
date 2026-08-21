@@ -112,7 +112,8 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 - **身份識別但不顯示**：表單本身不問姓名/帳號（維持匿名體感），但後端會用 `liff.getAccessToken()` 拿到的 access token 呼叫 LINE 的 `GET /v2/profile`（`app/line_client.get_liff_user_id`）換回經過驗證的 `userId`，藉此對應到 `students` 表裡的學生——**刻意不信任前端回傳的任何身份欄位**，因為 `liff.getProfile()` 這類前端呼叫的結果理論上可能被竄改，只有後端自己拿 token 去跟 LINE 換到的 userId 才可信
 - 同一個學生同一輪次重複送出，會覆蓋掉舊答案（`crud.upsert_assessment_response`，靠 `assessment_responses` 的 `(student_id, assessment_round)` unique constraint 判斷）
 - 推播問卷連結：`POST /admin/push-assessment?round=baseline`（帶 `X-Admin-Key`）廣播問卷連結給所有好友。跟每日測驗不同，前測/中測/後測只知道「哪一週」要發（見下方行程），沒有精確到哪一天，所以做成手動觸發，由管理員自己挑那一週裡的哪一天發送
-- **LIFF App 設定**：LIFF App 是掛在獨立的 LINE Login channel 底下（LINE 現在不允許 LIFF 直接掛在 Messaging API channel），LIFF ID 存在 `.env` 的 `LIFF_ID`。LIFF App 的 **Endpoint URL** 要設成 `https://climate-action-bot.onrender.com/liff/assessment`（本機測試則設本機的 ngrok 網址 + `/liff/assessment`），`round` 參數會由 `https://liff.line.me/{LIFF_ID}?round=baseline` 這種連結自動透傳過去，不用另外設定
+- **LIFF App 設定**：LIFF App 是掛在獨立的 LINE Login channel 底下（LINE 現在不允許 LIFF 直接掛在 Messaging API channel），LIFF ID 存在 `.env` 的 `LIFF_ID`。LIFF App 的 **Endpoint URL** 要設成 `https://climate-action-bot.onrender.com/liff/assessment`（本機測試則設本機的 ngrok 網址 + `/liff/assessment`）
+- **`round` 這個 query 參數是前端處理的，不是後端**：LINE 從 `https://liff.line.me/{LIFF_ID}?round=baseline` 轉址過來時，不保證第一次打到後端的請求就帶著 `?round=baseline`（LINE 會先把它編碼進 `liff.state`，等瀏覽器裡的 `liff.init()` 執行完才會把網址補回正確的 query string）。所以 `GET /liff/assessment` 不吃 `round` 參數、一律回同一個空殼頁面；等 JS 端 `liff.init()` 完成後才從 `location.search` 讀 `round`，再打 `GET /liff/assessment/questions?round=xxx`（回傳題目 JSON）動態把表單畫出來。踩過這個坑：一開始讓後端直接用 `round: str` 當必填 query 參數、伺服器端 Jinja2 直接渲染，結果 LIFF 開出來直接 422 缺參數
 
 ## 尚未完成（規格書第 10 節後續步驟）
 

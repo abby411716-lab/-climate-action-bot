@@ -16,21 +16,26 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent
 
 
 @router.get("/assessment")
-def assessment_form(request: Request, round: str):
+def assessment_form(request: Request):
+    """頁面本身不依賴 round 這個 query 參數就能載入。
+
+    LINE 的 LIFF 轉址不保證第一次進到後端的請求就帶著原始網址上的 query string
+    （LINE 會把它編碼進 liff.state，要等瀏覽器裡的 liff.init() 執行完才會補回網址），
+    所以「要顯示哪一輪問卷」這件事挪到前端 JS 處理：liff.init() 完成後才從網址讀 round，
+    再打 /liff/assessment/questions 拿題目動態把表單畫出來，而不是在這裡用 Jinja2 先渲染好。
+    """
+    return templates.TemplateResponse("assessment.html", {"request": request, "liff_id": settings.liff_id})
+
+
+@router.get("/assessment/questions")
+def assessment_questions_api(round: str):
     if round not in assessment_questions.ROUNDS:
         raise HTTPException(status_code=404, detail="不存在的問卷輪次")
 
-    questions = assessment_questions.get_questions_for_round(round)
-    return templates.TemplateResponse(
-        "assessment.html",
-        {
-            "request": request,
-            "liff_id": settings.liff_id,
-            "assessment_round": round,
-            "round_label": assessment_questions.ROUND_LABELS[round],
-            "questions": questions,
-        },
-    )
+    return {
+        "round_label": assessment_questions.ROUND_LABELS[round],
+        "questions": assessment_questions.get_questions_for_round(round),
+    }
 
 
 class AssessmentSubmitRequest(BaseModel):
