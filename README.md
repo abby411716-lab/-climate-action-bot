@@ -18,6 +18,12 @@ Copy-Item .env.example .env
 
 編輯 `.env`，填入你的 LINE Messaging API channel secret / access token（LINE Developers Console → Messaging API 頁籤取得）。
 
+建立/更新資料庫 schema（用 Alembic migration，見下方「資料庫 schema 變更（Alembic）」一節）：
+
+```powershell
+alembic upgrade head
+```
+
 ## 建立第一間學校
 
 ```powershell
@@ -43,7 +49,7 @@ uvicorn app.main:app --reload
   - 文字訊息：若尚未歸校則詢問學校，已歸校則回覆目前身分／能量／連續天數／徽章
 - 每日推送＋答題＋積分/streak/徽章（規格書第 10 節第 2 步）：
   - `app/scheduler.py`：程式啟動時用 APScheduler 在背景排程，每天 Asia/Taipei 08:00 自動推送當日題目（`push_daily_question`）
-  - `app/daily_push.py`：依 `questions.scheduled_date` 排序（沒設定日期的排最後）取出「尚未推送過」的下一題，用 LINE Broadcast API 一次推給所有好友（知識卡 + 測驗，測驗選項做成 Quick Reply 按鈕）；同一天已推送過就不會再推
+  - `app/daily_push.py`：取出「`scheduled_date` 已到（`<=` 今天）、但還沒推送過」的下一題（`app/crud.get_next_unpushed_question`），用 LINE Broadcast API 一次推給所有好友（知識卡 + 測驗，測驗選項做成 Quick Reply 按鈕）；同一天已推送過就不會再推。沒有設定 `scheduled_date` 的題目不會被自動排程選到。用 `<=` 而不是 `==` 是為了在服務曾經漏推（例如 Render 休眠跳過某一天）時能自動補推；排定日期落在週末、或兩個 Round 之間的空檔週，當天就不會有題目符合條件，會自動跳過不推送
   - 學生點選答案後（`app/routers/webhook.py` 的 `_handle_answer_postback`）：寫入 `answer_logs`（同一題只能答一次），更新 `students.total_points / current_streak / longest_streak / badges`
   - `app/game_rules.py`：積分／連續天數／徽章／稱號的規則都集中在這裡（規格書沒有寫死細節，這是我先訂的一版合理規則，可依需求調整數值）：
     - 答對 +10、答錯 +2（給少量參與分數鼓勵持續作答）
@@ -52,7 +58,8 @@ uvicorn app.main:app --reload
     - 徽章：首次答題／首次答對／連續 3、7、30 天／累計答對 10、30 題／累積能量達 300，達成條件就解鎖，回覆訊息會附上「解鎖新徽章」提示
   - 手動測試用：`POST /admin/push-daily`（帶 `X-Admin-Key`，可加 `?force=true` 略過「今天已推送過」的檢查）可以不用等到 08:00 就手動觸發一次推送
   - `python -m scripts.seed_question` 可以建立一筆測試題目，方便本機測試整套流程
-  - **注意**：Render 免費方案的 Web Service 閒置一段時間會休眠，休眠期間內建的 APScheduler 排程不會執行；規格書第 10 節第 4 步（外部 cron）之後可以改用 Render 付費 Cron Job 或外部服務定時呼叫 `/admin/push-daily` 來取代或搭配這個內建排程
+  - `python -m scripts.seed_questions_from_csv <csv路徑>` 用來批次匯入正式題庫，CSV 欄位為 `knowledge_card_text, question_text, option_a, option_b, option_c, option_d, correct_option, topic_tag, scheduled_date`（`correct_option` 填選項文字本身；`scheduled_date` 就是題目實際會被推送的日期，見上方「每日推送」小節）；已存在相同 `question_text` 的題目會自動跳過，可重複執行
+  - **Render 免費方案休眠備援**：`.github/workflows/daily-push.yml` 用 GitHub Actions 排程（`cron: "0 0 * * *"`，即 Asia/Taipei 08:00）每天呼叫一次 `/admin/push-daily`。這個 HTTP 請求本身會把休眠中的 Render 服務叫醒，跟服務內建的 APScheduler 是雙保險：`push_daily_question` 有「今天已經推送過就跳過」的檢查，兩邊前後都觸發到也不會重複推送。需要在 GitHub repo 的 **Settings → Secrets and variables → Actions** 新增一個 secret：`ADMIN_API_KEY`，值要跟 Render 上的 `ADMIN_API_KEY` 一致（之後如果在 Render 換了 key，這裡也要跟著更新，否則 workflow 會收到 401）。GitHub Actions 的排程時間不保證精準觸發，尖峰時段可能延遲，但對「每天推 1 題」這種用途影響不大
 
 ## Rich Menu ＋ 暱稱 ＋ 環保打卡 ＋ 排行榜
 
@@ -98,17 +105,26 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 成效評估問卷（LIFF 表單）＋排程推送
+1. 成效評估問卷（LIFF 表單）＋排程推送（下一個要做的項目；需要先在 LINE Developers Console 建立 LIFF App）
 2. 教師後台（總覽、個別學生頁、題目分析、成效總覽；目前只有 `/admin/checkins` 系列陽春 API，沒有網頁介面）
-3. 正式題庫建置（目前只有 `scripts/seed_question.py` 建立的測試題目，需要依規格書內容建置完整每日題庫並排定 `scheduled_date`）
-4. 更穩定的排程機制（目前是程式內建 APScheduler，Render 免費方案休眠時不會執行，見上方注意事項）
-5. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
+3. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
+4. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週，不推送題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步進行中測（題庫本身沒有涵蓋，屬另外的評估問卷）；11/3 那週為 Round3 後測，題庫本身也沒有涵蓋（前測／中測／後測問卷屬於上方第 1 點「成效評估問卷」，還沒開發）。Round2 結束後題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
-## ⚠️ 部署前必看：這次改了資料庫 schema
+## 資料庫 schema 變更（Alembic）
 
-這次新增了 `students.nickname` 欄位跟 `eco_checkins` 表。`Base.metadata.create_all()`（`app/main.py`）只會建立**還不存在**的新表，**不會**幫已存在的 `students` 表補欄位。專案目前沒有導入 Alembic 之類的 migration 工具，本機開發都是直接刪掉 `climate_action.db` 重建。
+專案已導入 [Alembic](https://alembic.sqlalchemy.org/) 管理資料庫 schema，取代原本 `Base.metadata.create_all()` 的作法。
 
-上線到 Render 的 Postgres 前，因為目前還在測試階段、還沒有正式學生資料，建議直接把 Render 那個 Postgres 資料庫清空重建（或找 Render 的重置資料庫功能）讓它照新的 `app/models.py` 重新產生 schema；等到有正式資料之後如果還要改 schema，就需要另外處理 migration，不能再用清空重建。
+> **背景**：先前 `students` 表新增 `nickname` 欄位時，因為 `create_all()` 只會建立「還不存在」的新表、**不會**幫已存在的表補欄位，導致本機 schema 跟 Render 上（已有真實資料的）Postgres 產生落差，上線後查詢 `students` 會直接噴 `UndefinedColumn` 錯誤。改用 Alembic 之後，每次改 `app/models.py` 都會產生一支對應的 migration script，用 `alembic upgrade head` 套用，本機、Render 兩邊的 schema 才會確實同步。
+
+**修改 schema 的流程**：
+
+1. 改 `app/models.py`
+2. 產生 migration：`alembic revision --autogenerate -m "說明這次改了什麼"`（會依目前 DB 與 model 的差異，在 `alembic/versions/` 產生一支新檔案，**務必打開檢查**產生的內容是否符合預期，autogenerate 不是 100% 準確）
+3. 本機套用：`alembic upgrade head`
+4. commit migration 檔案一起 push
+5. Render 部署時 `startCommand`（見 `render.yaml`）會自動先跑 `alembic upgrade head` 再啟動服務，正式環境的 schema 會跟著更新，不用手動操作
+
+`alembic/env.py` 已設定成沿用 `app.config.settings.database_url`，本機 sqlite、Render Postgres 都不用另外調整連線設定。
 
 ## 關於加好友連結帶入學校參數
 

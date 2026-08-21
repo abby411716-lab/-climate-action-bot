@@ -2,11 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.database import Base, engine
 from app.routers import admin, webhook
 from app.scheduler import start_scheduler
-
-Base.metadata.create_all(bind=engine)
 
 
 @asynccontextmanager

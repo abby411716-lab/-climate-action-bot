@@ -8,12 +8,11 @@ import sys
 
 sys.path.append(".")
 
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal
 from app import models
 
 
 def main():
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         question = models.Question(

@@ -1,0 +1,24 @@
+name: Daily question push
+
+# Render 免費方案的 Web Service 閒置一段時間會休眠，休眠期間服務內建的 APScheduler
+# （app/scheduler.py，每天 08:00 Asia/Taipei）不會執行。這個 workflow 從外部定時呼叫
+# /admin/push-daily 當作可靠備援：一來這個 HTTP 請求本身會把休眠中的服務叫醒，
+# 二來 push_daily_question 本身有「今天已經推送過就跳過」的檢查，就算跟服務內建排程
+# 前後都觸發到也不會重複推送，兩邊同時存在是安全的。
+
+on:
+  schedule:
+    # 00:00 UTC = 08:00 Asia/Taipei。GitHub Actions 的排程時間不保證精準觸發，
+    # 尖峰時段可能延遲數分鐘到數十分鐘，對「每天推 1 題」這種用途影響不大。
+    - cron: "0 0 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger /admin/push-daily
+        run: |
+          curl -sf -X POST "https://climate-action-bot.onrender.com/admin/push-daily" \
+            -H "X-Admin-Key: ${{ secrets.ADMIN_API_KEY }}" \
+            --max-time 90 --retry 2 --retry-delay 20

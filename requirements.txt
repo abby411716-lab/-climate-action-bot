@@ -5,6 +5,7 @@ pydantic-settings==2.5.2
 line-bot-sdk==3.25.0
 python-dotenv==1.0.1
 psycopg2-binary==2.9.9
+alembic==1.19.1
 apscheduler==3.10.4
 tzdata==2024.2
 pillow==12.3.0

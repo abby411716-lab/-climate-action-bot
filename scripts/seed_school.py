@@ -8,7 +8,7 @@ import sys
 
 sys.path.append(".")
 
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal
 from app import crud, models
 
 LINE_BOT_BASIC_ID = "@071qusgf"
@@ -21,7 +21,6 @@ def main():
 
     school_name, join_link_code = sys.argv[1], sys.argv[2]
 
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         existing = crud.get_school_by_join_code(db, join_link_code)

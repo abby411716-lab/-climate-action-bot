@@ -1,4 +1,5 @@
-from sqlalchemy import nullslast
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app import models
@@ -112,13 +113,20 @@ def get_question_by_id(db: Session, question_id: int) -> models.Question | None:
     return db.query(models.Question).filter(models.Question.question_id == question_id).first()
 
 
-def get_next_unpushed_question(db: Session) -> models.Question | None:
-    """依 scheduled_date 排序（沒設定的排最後），取尚未推送過的下一題。"""
+def get_next_unpushed_question(db: Session, today: date) -> models.Question | None:
+    """取出「排定日期已到（scheduled_date <= today）、但還沒推送過」的下一題。
+
+    沒有設定 scheduled_date 的題目不會被自動排程選到（例如 scripts/seed_question.py 建的測試題）。
+    用 <= 而不是 == 是為了在服務曾經漏推（例如 Render 休眠跳過某一天）時能自動補推，
+    同時排定日期落在週末／空檔週的日子會自然選不到題目而跳過，不需要另外判斷平假日。
+    """
     pushed_ids = db.query(models.DailyPush.question_id)
     return (
         db.query(models.Question)
         .filter(~models.Question.question_id.in_(pushed_ids))
-        .order_by(nullslast(models.Question.scheduled_date), models.Question.question_id)
+        .filter(models.Question.scheduled_date.isnot(None))
+        .filter(models.Question.scheduled_date <= today)
+        .order_by(models.Question.scheduled_date, models.Question.question_id)
         .first()
     )
 
