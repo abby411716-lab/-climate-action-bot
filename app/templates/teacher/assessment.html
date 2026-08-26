@@ -1,6 +1,27 @@
 {% extends "teacher/base.html" %}
 {% block title %}成效總覽{% endblock %}
 {% block content %}
+{% if sent_label %}
+<div class="card" style="background:#eef7ee;">
+  <p style="margin:0; color:#1f5c2b; font-weight:600;">✅ 已廣播「{{ sent_label }}」問卷連結給所有 LINE 好友</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>發送問卷連結</h2>
+  <p class="meta" style="margin:0 0 14px;">按下按鈕會立即用 LINE Broadcast 廣播問卷連結給「目前所有」LINE 好友，不分學校，同一輪次不要重複發送。</p>
+  {% set round_labels = {"baseline": "前測", "midterm": "中測", "posttest": "後測"} %}
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    {% for r in ["baseline", "midterm", "posttest"] %}
+    <form method="post" action="/teacher/assessment/push"
+          onsubmit="return confirm('確定要把「{{ round_labels[r] }}」問卷連結廣播給所有 LINE 好友嗎？這個動作會立即發送，無法收回。');">
+      <input type="hidden" name="assessment_round" value="{{ r }}">
+      <button type="submit" class="btn btn-approve" style="padding: 9px 18px;">發送{{ round_labels[r] }}問卷</button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
 {% for r in rounds %}
 <div class="card">
   <h2>{{ r.round_label }}（{{ r.response_count }} 份回覆）</h2>

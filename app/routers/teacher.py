@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app import assessment_questions, crud, eco_checkin, game_rules, teacher_dashboard
+from app.assessment import broadcast_assessment_invite
 from app.config import settings
 from app.database import get_db
 
@@ -136,13 +137,25 @@ def questions_analysis(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/assessment")
-def assessment_overview(request: Request, db: Session = Depends(get_db)):
+def assessment_overview(request: Request, sent: str | None = None, db: Session = Depends(get_db)):
     if resp := require_teacher(request):
         return resp
     rounds = [teacher_dashboard.assessment_round_stats(db, r) for r in assessment_questions.ROUNDS]
+    sent_label = assessment_questions.ROUND_LABELS.get(sent) if sent else None
     return templates.TemplateResponse(
-        "teacher/assessment.html", {"request": request, "active": "assessment", "rounds": rounds}
+        "teacher/assessment.html",
+        {"request": request, "active": "assessment", "rounds": rounds, "sent_label": sent_label},
     )
+
+
+@router.post("/assessment/push")
+def assessment_push(request: Request, assessment_round: str = Form(...)):
+    if resp := require_teacher(request):
+        return resp
+    if assessment_round not in assessment_questions.ROUNDS:
+        raise HTTPException(status_code=400, detail="round 必須是 baseline / midterm / posttest")
+    broadcast_assessment_invite(assessment_round)
+    return RedirectResponse(url=f"/teacher/assessment?sent={assessment_round}", status_code=303)
 
 
 @router.get("/checkins")
