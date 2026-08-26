@@ -28,6 +28,18 @@
   .scale-options input { width: 22px; height: 22px; margin: 0 0 2px; }
   textarea { width: 100%; min-height: 70px; border: 1px solid #d8e0d8; border-radius: 8px; padding: 10px; font-size: 0.95rem; font-family: inherit; }
   .max-select-hint { font-size: 0.75rem; color: #8a948a; margin-top: 4px; }
+  .category-heading { font-weight: 700; color: #2f7a3f; font-size: 0.85rem; margin: 18px 0 8px; }
+  .category-heading:first-child { margin-top: 0; }
+  #carbon-result { display: none; text-align: center; padding: 20px 0; }
+  .score-circle {
+    width: 140px; height: 140px; border-radius: 50%; background: #eef7ee; border: 6px solid #2f7a3f;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 0 auto 16px;
+  }
+  .score-circle .score-number { font-size: 2.4rem; font-weight: 800; color: #1f5c2b; line-height: 1; }
+  .score-circle .score-unit { font-size: 0.75rem; color: #667066; }
+  #carbon-result .level-name { font-size: 1.2rem; font-weight: 700; margin: 0 0 6px; }
+  #carbon-result .level-flavor { color: #4a5a4a; font-size: 0.9rem; margin: 0 0 14px; }
+  #carbon-result .reward { display: none; background: #fff4d6; color: #8a6a1f; padding: 12px; border-radius: 10px; font-size: 0.9rem; white-space: pre-line; }
   button#submit-btn {
     width: 100%; padding: 14px; font-size: 1rem; font-weight: 600;
     background: #2f7a3f; color: #fff; border: none; border-radius: 10px; margin-top: 8px;
@@ -52,6 +64,16 @@
     <button type="submit" id="submit-btn">送出問卷</button>
     <div id="status"></div>
   </form>
+
+  <div id="carbon-result">
+    <div class="score-circle">
+      <span class="score-number"></span>
+      <span class="score-unit">/ 100</span>
+    </div>
+    <p class="level-name"></p>
+    <p class="level-flavor"></p>
+    <p class="reward"></p>
+  </div>
 </div>
 
 <script>
@@ -221,6 +243,88 @@ async function loadQuestions() {
   });
 }
 
+async function loadCarbonFootprint() {
+  let data;
+  try {
+    const res = await fetch("/liff/carbon-footprint/questions");
+    if (!res.ok) throw new Error("bad response");
+    data = await res.json();
+  } catch (err) {
+    document.getElementById("loading").textContent = "載入計算器失敗，請稍後再試一次。";
+    return;
+  }
+
+  document.getElementById("form-title").textContent = "🧮 碳足跡打卡計算器";
+  document.title = "碳足跡打卡計算器";
+  document.querySelector("p.intro").textContent =
+    "花 2 分鐘想想你的交通、居家能源、垃圾回收習慣，看看自己的綠色分數！可以重複填寫，分數會重新計算。";
+
+  const container = document.getElementById("questions-container");
+  let lastCategory = null;
+  data.questions.forEach(q => {
+    if (q.category && q.category !== lastCategory) {
+      container.appendChild(el("p", { class: "category-heading", text: q.category }));
+      lastCategory = q.category;
+    }
+    container.appendChild(renderQuestion({ ...q, type: "single_choice" }));
+  });
+
+  document.getElementById("submit-btn").textContent = "計算我的綠色分數";
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("form-wrap").style.display = "block";
+
+  document.getElementById("assessment-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const accessToken = liff.getAccessToken();
+    await submitCarbonFootprint(accessToken);
+  });
+}
+
+async function submitCarbonFootprint(accessToken) {
+  const answers = collectAnswers();
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  btn.textContent = "計算中…";
+
+  try {
+    const res = await fetch("/liff/carbon-footprint/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ access_token: accessToken, answers: answers }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showStatus(data.detail || "送出失敗，請確認每一題都填答後再試一次", true);
+      btn.disabled = false;
+      btn.textContent = "計算我的綠色分數";
+      return;
+    }
+    showCarbonResult(data);
+  } catch (err) {
+    showStatus("網路連線異常，請稍後再試一次", true);
+    btn.disabled = false;
+    btn.textContent = "計算我的綠色分數";
+  }
+}
+
+function showCarbonResult(data) {
+  document.getElementById("assessment-form").style.display = "none";
+  const result = document.getElementById("carbon-result");
+  result.querySelector(".score-number").textContent = data.green_score;
+  result.querySelector(".level-name").textContent = data.level_name;
+  result.querySelector(".level-flavor").textContent = data.level_flavor;
+  const rewardEl = result.querySelector(".reward");
+  if (data.is_first_time) {
+    let text = `🎉 第一次完成，獲得 ${data.points_awarded} 能量！`;
+    if (data.new_badges && data.new_badges.length) {
+      text += "\n" + data.new_badges.map(n => `🏅 解鎖新徽章：${n}`).join("\n");
+    }
+    rewardEl.textContent = text;
+    rewardEl.style.display = "block";
+  }
+  result.style.display = "block";
+}
+
 async function init() {
   try {
     await liff.init({ liffId: LIFF_ID });
@@ -228,7 +332,12 @@ async function init() {
       liff.login();
       return;
     }
-    await loadQuestions();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("form") === "carbon_footprint") {
+      await loadCarbonFootprint();
+    } else {
+      await loadQuestions();
+    }
   } catch (err) {
     document.getElementById("loading").textContent = "初始化失敗，請透過 LINE 開啟這個連結再試一次。";
   }

@@ -16,6 +16,7 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 CORRECT_POINTS = 10
 INCORRECT_POINTS = 2  # 答錯仍給少量「參與能量」，鼓勵每天持續作答
 ECO_CHECKIN_POINTS = 15  # 拍照打卡經老師審核通過後發放的能量，比答題略高以鼓勵實際行動
+CARBON_CALC_POINTS = 20  # 首次完成碳足跡打卡計算器發放的能量，題目較多、要花時間思考，比打卡略高
 
 # (累積能量門檻, 稱號, 故事文案)，由低到高排列
 RANKS: list[tuple[int, str, str]] = [
@@ -39,6 +40,7 @@ BADGES: list[tuple[str, str, str, Callable[[dict], bool]]] = [
     ("points_300", "💎 行動力達人", "累積能量達 300", lambda s: s.get("total_points", 0) >= 300),
     ("eco_first", "🌎 環保初體驗", "第一次環保打卡通過審核", lambda s: s.get("eco_checkin_count", 0) >= 1),
     ("eco_10", "♻️ 環保達人", "累計 10 次環保打卡通過審核", lambda s: s.get("eco_checkin_count", 0) >= 10),
+    ("carbon_pioneer", "🧮 碳足跡先鋒", "完成第一次碳足跡打卡計算器", lambda s: s.get("carbon_calc_done", False)),
 ]
 
 _BADGE_DISPLAY = {code: name for code, name, _desc, _check in BADGES}

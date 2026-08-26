@@ -68,6 +68,26 @@
 </div>
 
 <div class="card">
+  <h2>碳足跡打卡計算器</h2>
+  {% if carbon_result %}
+  <p class="meta" style="margin:0 0 10px;">
+    綠色分數：<strong>{{ carbon_result.green_score }} / 100</strong>（{{ carbon_result.level_name }}）<br>
+    {{ carbon_result.level_flavor }}<br>
+    最後更新：{{ carbon_result.updated_at.strftime('%Y-%m-%d %H:%M') }}
+  </p>
+  <table>
+    <tbody>
+    {% for a in carbon_result.answers %}
+      <tr><td style="width:20%; color:#8a948a;">{{ a.category }}</td><td style="width:45%">{{ a.text }}</td><td>{{ a.answer }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">尚未填寫碳足跡打卡計算器</div>
+  {% endif %}
+</div>
+
+<div class="card">
   <h2>成效評估問卷回覆</h2>
   {% if assessment_sections %}
     {% for section in assessment_sections %}

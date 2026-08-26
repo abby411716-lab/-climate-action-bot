@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app import assessment_questions, crud, eco_checkin, game_rules
 from app.assessment import broadcast_assessment_invite
+from app.carbon_footprint import broadcast_carbon_footprint_invite
 from app.config import settings
 from app.daily_push import push_daily_question
 from app.database import get_db
@@ -74,6 +75,13 @@ def trigger_assessment_push(round: str):
         raise HTTPException(status_code=400, detail="round 必須是 baseline / midterm / posttest")
     broadcast_assessment_invite(round)
     return {"status": "triggered", "round": round}
+
+
+@router.post("/push-carbon-footprint", dependencies=[Depends(require_admin_key)])
+def trigger_carbon_footprint_push():
+    """廣播碳足跡打卡計算器的 LIFF 連結給所有好友。"""
+    broadcast_carbon_footprint_invite()
+    return {"status": "triggered"}
 
 
 @router.get("/checkins", dependencies=[Depends(require_admin_key)])

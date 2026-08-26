@@ -274,6 +274,55 @@ def list_assessment_responses(db: Session, assessment_round: str) -> list[models
     )
 
 
+def get_carbon_footprint_response(db: Session, student_id: int) -> models.CarbonFootprintResponse | None:
+    return (
+        db.query(models.CarbonFootprintResponse)
+        .filter(models.CarbonFootprintResponse.student_id == student_id)
+        .first()
+    )
+
+
+def list_carbon_footprint_responses(db: Session) -> list[models.CarbonFootprintResponse]:
+    return (
+        db.query(models.CarbonFootprintResponse)
+        .order_by(models.CarbonFootprintResponse.submitted_at.desc())
+        .all()
+    )
+
+
+def upsert_carbon_footprint_response(
+    db: Session,
+    student: models.Student,
+    *,
+    responses: dict,
+    total_score: int,
+    max_score: int,
+    green_score: int,
+) -> tuple[models.CarbonFootprintResponse, bool]:
+    """新增或覆蓋這位學生的碳足跡計算結果。回傳 (record, is_first_time)，is_first_time 給呼叫端判斷要不要發獎勵。"""
+    existing = get_carbon_footprint_response(db, student.student_id)
+    if existing:
+        existing.responses = responses
+        existing.total_score = total_score
+        existing.max_score = max_score
+        existing.green_score = green_score
+        db.commit()
+        db.refresh(existing)
+        return existing, False
+
+    record = models.CarbonFootprintResponse(
+        student_id=student.student_id,
+        responses=responses,
+        total_score=total_score,
+        max_score=max_score,
+        green_score=green_score,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record, True
+
+
 def save_student_progress(
     db: Session,
     student: models.Student,

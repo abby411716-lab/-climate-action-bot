@@ -11,8 +11,9 @@ from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app import assessment_questions, crud, eco_checkin, game_rules, teacher_dashboard
+from app import assessment_questions, carbon_footprint, crud, eco_checkin, game_rules, teacher_dashboard
 from app.assessment import broadcast_assessment_invite
+from app.carbon_footprint import broadcast_carbon_footprint_invite
 from app.config import settings
 from app.database import get_db
 
@@ -110,6 +111,18 @@ def student_detail(request: Request, student_id: int, db: Session = Depends(get_
         for r in crud.list_assessment_responses_for_student(db, student_id)
     ]
 
+    carbon_result = None
+    carbon_response = crud.get_carbon_footprint_response(db, student_id)
+    if carbon_response:
+        level_name, level_flavor = carbon_footprint.current_level(carbon_response.green_score)
+        carbon_result = {
+            "green_score": carbon_response.green_score,
+            "level_name": level_name,
+            "level_flavor": level_flavor,
+            "updated_at": carbon_response.updated_at,
+            "answers": teacher_dashboard.describe_carbon_footprint_response(carbon_response),
+        }
+
     return templates.TemplateResponse(
         "teacher/student_detail.html",
         {
@@ -122,6 +135,7 @@ def student_detail(request: Request, student_id: int, db: Session = Depends(get_
             "answer_logs": crud.list_answer_logs_for_student(db, student_id),
             "checkins": crud.list_eco_checkins_for_student(db, student_id),
             "assessment_sections": assessment_sections,
+            "carbon_result": carbon_result,
         },
     )
 
@@ -156,6 +170,25 @@ def assessment_push(request: Request, assessment_round: str = Form(...)):
         raise HTTPException(status_code=400, detail="round 必須是 baseline / midterm / posttest")
     broadcast_assessment_invite(assessment_round)
     return RedirectResponse(url=f"/teacher/assessment?sent={assessment_round}", status_code=303)
+
+
+@router.get("/carbon-footprint")
+def carbon_footprint_page(request: Request, sent: str | None = None, db: Session = Depends(get_db)):
+    if resp := require_teacher(request):
+        return resp
+    stats = teacher_dashboard.carbon_footprint_stats(db)
+    return templates.TemplateResponse(
+        "teacher/carbon_footprint.html",
+        {"request": request, "active": "carbon", "sent": bool(sent), **stats},
+    )
+
+
+@router.post("/carbon-footprint/push")
+def carbon_footprint_push(request: Request):
+    if resp := require_teacher(request):
+        return resp
+    broadcast_carbon_footprint_invite()
+    return RedirectResponse(url="/teacher/carbon-footprint?sent=1", status_code=303)
 
 
 @router.get("/checkins")

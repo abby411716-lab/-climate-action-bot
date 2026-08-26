@@ -1,0 +1,61 @@
+{% extends "teacher/base.html" %}
+{% block title %}碳足跡{% endblock %}
+{% block content %}
+{% if sent %}
+<div class="card" style="background:#eef7ee;">
+  <p style="margin:0; color:#1f5c2b; font-weight:600;">✅ 已廣播碳足跡打卡計算器連結給所有 LINE 好友</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>發送計算器連結</h2>
+  <p class="meta" style="margin:0 0 14px;">按下按鈕會立即用 LINE Broadcast 廣播計算器連結給「目前所有」LINE 好友。學生可以重複填寫更新分數，只有第一次完成會發能量。</p>
+  <form method="post" action="/teacher/carbon-footprint/push"
+        onsubmit="return confirm('確定要把碳足跡打卡計算器連結廣播給所有 LINE 好友嗎？這個動作會立即發送，無法收回。');">
+    <button type="submit" class="btn btn-approve" style="padding: 9px 18px;">發送計算器連結</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>整體概況</h2>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="num">{{ response_count }}</div><div class="label">已填寫人數</div></div>
+    <div class="stat-box"><div class="num">{% if avg_score is not none %}{{ avg_score }}{% else %}—{% endif %}</div><div class="label">平均綠色分數</div></div>
+  </div>
+  {% if level_counts %}
+  <table style="margin-top:14px;">
+    <thead><tr><th>等級</th><th>人數</th></tr></thead>
+    <tbody>
+    {% for level_name, count in level_counts.items() %}
+      <tr><td>{{ level_name }}</td><td>{{ count }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>學生結果（依分數排序）</h2>
+  {% if rows %}
+  <table>
+    <thead><tr><th>暱稱</th><th>綠色分數</th><th>等級</th><th>最後更新</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td>
+          {% if row.student %}
+          <a class="row-link" href="/teacher/students/{{ row.student.student_id }}">{{ row.student.nickname or '（未設定暱稱）' }}</a>
+          {% else %}（未知學生）{% endif %}
+        </td>
+        <td>{{ row.green_score }}</td>
+        <td>{{ row.level_name }}</td>
+        <td>{{ row.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">尚未有人填寫</div>
+  {% endif %}
+</div>
+{% endblock %}

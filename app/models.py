@@ -41,6 +41,9 @@ class Student(Base):
     answer_logs: Mapped[list["AnswerLog"]] = relationship(back_populates="student")
     assessment_responses: Mapped[list["AssessmentResponse"]] = relationship(back_populates="student")
     eco_checkins: Mapped[list["EcoCheckin"]] = relationship(back_populates="student")
+    carbon_footprint_response: Mapped["CarbonFootprintResponse | None"] = relationship(
+        back_populates="student", uselist=False
+    )
 
 
 class Question(Base):
@@ -119,3 +122,25 @@ class AssessmentResponse(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     student: Mapped["Student"] = relationship(back_populates="assessment_responses")
+
+
+class CarbonFootprintResponse(Base):
+    """學生填寫的碳足跡打卡計算器結果（交通／居家能源／垃圾回收，共 6 題，見 app/carbon_footprint.py）。
+
+    每位學生只留一筆最新結果（可重填，重填會覆蓋分數重新計算，不像 AssessmentResponse 按輪次分開存），
+    只有「第一次」填寫才會發能量／解鎖徽章，重填只是更新分數，不會重複發獎勵（見 crud.upsert_carbon_footprint_response）。
+    刻意不做成精確的公斤 CO2e 估算，而是相對的「綠色分數」（0~100），重點是讓學生反思生活習慣。
+    """
+
+    __tablename__ = "carbon_footprint_responses"
+
+    response_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.student_id"), unique=True, nullable=False)
+    responses: Mapped[dict] = mapped_column(JSON, nullable=False)
+    total_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    green_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    student: Mapped["Student"] = relationship(back_populates="carbon_footprint_response")
