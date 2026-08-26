@@ -179,13 +179,13 @@ QUESTION_DEFS: dict[str, dict[str, Any]] = {
     },
     "program_helpfulness": {
         "type": "scale",
-        "text": "這學期整體來說，這個計畫（每日推播、環保打卡等）對你的氣候行動有多少幫助？",
+        "text": "活動整體來說，線上學習計畫（比歐小助教功能）對你的氣候行動有多少幫助？",
         "low_label": "完全沒幫助",
         "high_label": "非常有幫助",
     },
     "self_perceived_growth": {
         "type": "scale",
-        "text": "跟開學前比，你覺得自己在氣候知識/行動上進步了多少？",
+        "text": "跟活動開始前比，你覺得自己在氣候知識/行動上進步了多少？",
         "low_label": "沒有進步",
         "high_label": "進步很多",
     },
