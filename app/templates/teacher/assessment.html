@@ -1,0 +1,34 @@
+{% extends "teacher/base.html" %}
+{% block title %}成效總覽{% endblock %}
+{% block content %}
+{% for r in rounds %}
+<div class="card">
+  <h2>{{ r.round_label }}（{{ r.response_count }} 份回覆）</h2>
+  {% if r.scale_summaries %}
+  <table>
+    <thead><tr><th>題目</th><th>平均分數（1~5）</th><th>回覆數</th></tr></thead>
+    <tbody>
+    {% for s in r.scale_summaries %}
+      <tr>
+        <td>{{ s.text }}</td>
+        <td>{% if s.average is not none %}{{ s.average }}{% else %}—{% endif %}</td>
+        <td>{{ s.count }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if r.open_text_answers %}
+  <h3 style="margin: 16px 0 8px;">開放式回饋</h3>
+  <ul style="padding-left: 18px; font-size:0.88rem; color:#3a4a3a;">
+  {% for a in r.open_text_answers %}
+    <li style="margin-bottom:6px;">{{ a.text }}</li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  {% if not r.scale_summaries and not r.open_text_answers %}
+  <div class="empty">尚未有任何回覆</div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

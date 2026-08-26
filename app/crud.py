@@ -64,6 +64,46 @@ def get_leaderboard(db: Session, school_id: int, limit: int = 10) -> list[models
     )
 
 
+def list_students(db: Session, school_id: int | None = None) -> list[models.Student]:
+    query = db.query(models.Student)
+    if school_id is not None:
+        query = query.filter(models.Student.school_id == school_id)
+    return query.order_by(models.Student.total_points.desc()).all()
+
+
+def count_students(db: Session, school_id: int | None = None) -> int:
+    query = db.query(models.Student)
+    if school_id is not None:
+        query = query.filter(models.Student.school_id == school_id)
+    return query.count()
+
+
+def list_answer_logs_for_student(db: Session, student_id: int) -> list[models.AnswerLog]:
+    return (
+        db.query(models.AnswerLog)
+        .filter(models.AnswerLog.student_id == student_id)
+        .order_by(models.AnswerLog.answered_at.desc())
+        .all()
+    )
+
+
+def list_eco_checkins_for_student(db: Session, student_id: int) -> list[models.EcoCheckin]:
+    return (
+        db.query(models.EcoCheckin)
+        .filter(models.EcoCheckin.student_id == student_id)
+        .order_by(models.EcoCheckin.submitted_at.desc())
+        .all()
+    )
+
+
+def list_assessment_responses_for_student(db: Session, student_id: int) -> list[models.AssessmentResponse]:
+    return (
+        db.query(models.AssessmentResponse)
+        .filter(models.AssessmentResponse.student_id == student_id)
+        .all()
+    )
+
+
 def create_eco_checkin(
     db: Session, student_id: int, line_message_id: str, image_data: bytes, image_mime: str
 ) -> models.EcoCheckin:
@@ -111,6 +151,18 @@ def finalize_eco_checkin(
 
 def get_question_by_id(db: Session, question_id: int) -> models.Question | None:
     return db.query(models.Question).filter(models.Question.question_id == question_id).first()
+
+
+def list_questions(db: Session) -> list[models.Question]:
+    return (
+        db.query(models.Question)
+        .order_by(models.Question.scheduled_date.is_(None), models.Question.scheduled_date, models.Question.question_id)
+        .all()
+    )
+
+
+def list_answer_logs_for_question(db: Session, question_id: int) -> list[models.AnswerLog]:
+    return db.query(models.AnswerLog).filter(models.AnswerLog.question_id == question_id).all()
 
 
 def get_next_unpushed_question(db: Session, today: date) -> models.Question | None:
@@ -212,6 +264,14 @@ def upsert_assessment_response(
     db.commit()
     db.refresh(response)
     return response
+
+
+def list_assessment_responses(db: Session, assessment_round: str) -> list[models.AssessmentResponse]:
+    return (
+        db.query(models.AssessmentResponse)
+        .filter(models.AssessmentResponse.assessment_round == assessment_round)
+        .all()
+    )
 
 
 def save_student_progress(

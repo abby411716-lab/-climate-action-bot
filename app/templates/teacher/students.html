@@ -1,0 +1,32 @@
+{% extends "teacher/base.html" %}
+{% block title %}學生列表{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>學生列表{% if selected_school_id %}（已篩選學校）{% endif %}</h2>
+  <div class="filter-bar">
+    <a class="row-link" href="/teacher/students">全部學校</a>
+    {% for s in schools %}
+      <a class="row-link" href="/teacher/students?school_id={{ s.school_id }}">{{ s.school_name }}</a>
+    {% endfor %}
+  </div>
+  {% if rows %}
+  <table>
+    <thead><tr><th>暱稱</th><th>學校</th><th>稱號</th><th>能量</th><th>連續天數</th><th>徽章數</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td><a class="row-link" href="/teacher/students/{{ row.student.student_id }}">{{ row.student.nickname or '（未設定暱稱）' }}</a></td>
+        <td>{{ row.school_name }}</td>
+        <td>{{ row.rank_name }}</td>
+        <td>{{ row.student.total_points }}</td>
+        <td>{{ row.student.current_streak }}</td>
+        <td>{{ row.student.badges|length }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">目前沒有學生資料</div>
+  {% endif %}
+</div>
+{% endblock %}

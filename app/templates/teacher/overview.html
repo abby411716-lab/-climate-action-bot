@@ -1,0 +1,35 @@
+{% extends "teacher/base.html" %}
+{% block title %}總覽{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>整體概況</h2>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="num">{{ total_students }}</div><div class="label">學生總數</div></div>
+    <div class="stat-box"><div class="num">{{ pending_checkins }}</div><div class="label">待審核打卡</div></div>
+    {% for a in assessment_counts %}
+    <div class="stat-box"><div class="num">{{ a.count }}</div><div class="label">{{ a.label }}問卷份數</div></div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>各校概況</h2>
+  {% if school_rows %}
+  <table>
+    <thead><tr><th>學校</th><th>學生數</th><th>已設定暱稱</th><th>平均能量</th></tr></thead>
+    <tbody>
+    {% for row in school_rows %}
+      <tr>
+        <td><a class="row-link" href="/teacher/students?school_id={{ row.school.school_id }}">{{ row.school.school_name }}</a></td>
+        <td>{{ row.student_count }}</td>
+        <td>{{ row.registered_count }}</td>
+        <td>{{ row.avg_points }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">尚未建立任何學校</div>
+  {% endif %}
+</div>
+{% endblock %}

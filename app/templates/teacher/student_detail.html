@@ -1,0 +1,87 @@
+{% extends "teacher/base.html" %}
+{% block title %}{{ student.nickname or '學生' }}{% endblock %}
+{% block content %}
+<a class="back-link" href="/teacher/students">← 回學生列表</a>
+
+<div class="card">
+  <h2>{{ student.nickname or '（未設定暱稱）' }}</h2>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="num">{{ student.total_points }}</div><div class="label">能量</div></div>
+    <div class="stat-box"><div class="num">{{ student.current_streak }}</div><div class="label">目前連續天數</div></div>
+    <div class="stat-box"><div class="num">{{ student.longest_streak }}</div><div class="label">最長連續天數</div></div>
+  </div>
+  <p class="meta" style="margin-top:14px;">
+    稱號：{{ rank_name }}（{{ rank_flavor }}）<br>
+    學校：{{ student.school.school_name if student.school else '（尚未選校）' }}
+    {% if student.class_name %} ／ 班級：{{ student.class_name }}{% endif %}
+    {% if student.grade %} ／ 年級：{{ student.grade }}{% endif %}
+    <br>加入時間：{{ student.joined_at.strftime('%Y-%m-%d %H:%M') }}
+  </p>
+  {% if badge_names %}
+  <p style="margin-top:10px;">🏅 {{ badge_names|join('　') }}</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>答題紀錄（共 {{ answer_logs|length }} 筆）</h2>
+  {% if answer_logs %}
+  <table>
+    <thead><tr><th>時間</th><th>題目</th><th>作答</th><th>結果</th></tr></thead>
+    <tbody>
+    {% for log in answer_logs %}
+      <tr>
+        <td>{{ log.answered_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ log.question.question_text }}</td>
+        <td>{{ log.selected_option }}</td>
+        <td><span class="pill {{ 'correct' if log.is_correct else 'incorrect' }}">{{ '答對' if log.is_correct else '答錯' }}</span></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">尚未作答任何題目</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>環保打卡紀錄（共 {{ checkins|length }} 筆）</h2>
+  {% if checkins %}
+  <table>
+    <thead><tr><th>時間</th><th>狀態</th><th>照片</th></tr></thead>
+    <tbody>
+    {% for c in checkins %}
+      <tr>
+        <td>{{ c.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          {% if c.status == 'pending' %}<span class="pill pending">待審核</span>
+          {% elif c.status == 'approved' %}<span class="pill approved">已通過</span>
+          {% else %}<span class="pill rejected">未通過</span>{% endif %}
+        </td>
+        <td><a class="row-link" href="/teacher/checkins/{{ c.checkin_id }}/image" target="_blank">查看照片</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">尚未有打卡紀錄</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>成效評估問卷回覆</h2>
+  {% if assessment_sections %}
+    {% for section in assessment_sections %}
+      <h3 style="margin: 16px 0 8px;">{{ section.round_label }}（送出時間：{{ section.submitted_at.strftime('%Y-%m-%d %H:%M') }}）</h3>
+      <table>
+        <tbody>
+        {% for a in section.answers %}
+          <tr><td style="width:55%">{{ a.text }}</td><td>{{ a.answer }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% endfor %}
+  {% else %}
+  <div class="empty">尚未填寫任何問卷</div>
+  {% endif %}
+</div>
+{% endblock %}

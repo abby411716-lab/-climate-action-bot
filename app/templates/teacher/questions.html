@@ -1,0 +1,33 @@
+{% extends "teacher/base.html" %}
+{% block title %}題目分析{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>題目分析（共 {{ rows|length }} 題）</h2>
+  {% if rows %}
+    {% for row in rows %}
+      <div style="padding: 14px 0; border-bottom: 1px solid #eef1ee;">
+        <p style="font-weight:600; margin:0 0 4px;">
+          {{ row.question.question_id }}. {{ row.question.question_text }}
+          {% if row.question.scheduled_date %}<span style="font-weight:400; color:#8a948a; font-size:0.8rem;">（{{ row.question.scheduled_date }}）</span>{% endif %}
+        </p>
+        <p style="margin: 0 0 8px; font-size:0.85rem; color:#4a5a4a;">
+          作答 {{ row.total_answered }} 次
+          {% if row.accuracy is not none %}／答對率 {{ row.accuracy }}%{% else %}／尚無人作答{% endif %}
+        </p>
+        <table>
+          <tbody>
+          {% for opt in row.options %}
+            <tr>
+              <td style="width:60%">{{ opt.text }}{% if opt.is_correct %} ✅{% endif %}</td>
+              <td>{{ opt.count }} 人</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty">尚未建立任何題目</div>
+  {% endif %}
+</div>
+{% endblock %}

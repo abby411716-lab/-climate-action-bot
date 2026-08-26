@@ -1,0 +1,42 @@
+{% extends "teacher/base.html" %}
+{% block title %}打卡審核{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>環保打卡審核</h2>
+  <div class="filter-bar">
+    <a class="row-link" href="/teacher/checkins?status=pending">待審核</a>
+    <a class="row-link" href="/teacher/checkins?status=approved">已通過</a>
+    <a class="row-link" href="/teacher/checkins?status=rejected">未通過</a>
+    <a class="row-link" href="/teacher/checkins?status=all">全部</a>
+  </div>
+  {% if rows %}
+  <div style="display:flex; flex-wrap:wrap; gap:16px;">
+  {% for row in rows %}
+    <div style="width:200px; background:#f7faf7; border-radius:10px; padding:12px;">
+      <img class="checkin-photo" src="/teacher/checkins/{{ row.checkin.checkin_id }}/image" alt="打卡照片">
+      <p style="margin:0 0 4px; font-size:0.85rem;">
+        <a class="row-link" href="/teacher/students/{{ row.student.student_id if row.student else '' }}">{{ row.student.nickname if row.student else '（未知學生）' }}</a>
+      </p>
+      <p style="margin:0 0 8px; font-size:0.75rem; color:#8a948a;">{{ row.checkin.submitted_at.strftime('%Y-%m-%d %H:%M') }}</p>
+      {% if row.checkin.status == "pending" %}
+      <div style="display:flex; gap:6px;">
+        <form method="post" action="/teacher/checkins/{{ row.checkin.checkin_id }}/approve" style="flex:1;">
+          <button type="submit" class="btn btn-approve" style="width:100%;">通過</button>
+        </form>
+        <form method="post" action="/teacher/checkins/{{ row.checkin.checkin_id }}/reject" style="flex:1;">
+          <button type="submit" class="btn btn-reject" style="width:100%;">拒絕</button>
+        </form>
+      </div>
+      {% elif row.checkin.status == "approved" %}
+      <span class="pill approved">已通過（+{{ row.checkin.points_awarded }}）</span>
+      {% else %}
+      <span class="pill rejected">未通過</span>
+      {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">沒有符合條件的打卡紀錄</div>
+  {% endif %}
+</div>
+{% endblock %}

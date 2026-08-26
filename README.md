@@ -1,13 +1,14 @@
 # 氣候行動學習互動網站
 
-依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援，以及前測/中測/後測成效評估問卷（LIFF 表單）。
+依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援、前測/中測/後測成效評估問卷（LIFF 表單），以及教師後台網頁（總覽／學生列表與個別學生頁／題目分析／成效總覽／打卡審核）。
 
-## 目前進度快照（2026-08-21）
+## 目前進度快照（2026-08-26）
 
 - ✅ 30 題正式題庫已排定實際發送日期（見下方「每日推送」），本機／Render 兩邊資料庫同步
 - ✅ 每日推送排程雙保險：服務內建 APScheduler ＋ GitHub Actions 外部 cron，已各自手動觸發驗證成功
 - ✅ 成效評估問卷（LIFF 表單）：前測/中測/後測三輪，已部署上線並在真實裝置上完整測試過一輪，可正常送出
-- ⏭️ 下一步：教師後台、真正的碳足跡計算器（見下方「尚未完成」）
+- ✅ 教師後台第一版（`/teacher`）：總覽、學生列表／個別學生頁、題目分析、成效總覽、打卡審核，本機已手動測試過所有頁面
+- ⏭️ 下一步：真正的碳足跡計算器（見下方「尚未完成」）
 
 ## 環境設定
 
@@ -84,6 +85,18 @@ uvicorn app.main:app --reload
   - 打卡目前**不影響**每日答題的連續天數（streak 只跟每日測驗有關）
 - **這只是「碳足跡計算器」裡「拍照打卡送分」的 bonus 版**；真正會計算數值的碳足跡問卷（規格書時程表 W2-3 上線那條線）還沒做，之後要做再另外討論
 
+## 教師後台
+
+網頁介面，路徑 `/teacher`（例如本機 `http://localhost:8000/teacher`，或部署後 `https://climate-action-bot.onrender.com/teacher`），程式在 `app/routers/teacher.py`（路由與畫面）＋ `app/teacher_dashboard.py`（統計彙整邏輯，讓路由檔只處理請求/回應）＋ `app/templates/teacher/`（Jinja2 樣板）。
+
+- **登入方式**：沿用既有的 `ADMIN_API_KEY`（跟 `/admin` 系列 JSON API 共用同一把金鑰），不是另外的帳號系統。`/teacher/login` 頁面輸入金鑰後，正確的話會存進一個 httpOnly cookie（`teacher_key`，效期 30 天），之後每個 `/teacher/*` 頁面都是看這個 cookie 判斷是否已登入，不用像 `/admin` API 那樣每次手動帶 `X-Admin-Key` Header。`/teacher/logout` 清掉 cookie。
+- **總覽**（`/teacher`）：學生總數、待審核打卡數、前測/中測/後測問卷已回收份數，以及各校學生數／已設定暱稱人數／平均能量。
+- **學生列表 ＋ 個別學生頁**（`/teacher/students`、`/teacher/students/{id}`）：列表可用學校篩選；個別學生頁彙整這位學生的能量／連續天數／稱號／徽章、完整答題紀錄、環保打卡紀錄（含照片連結）、以及每一輪成效評估問卷的完整回覆（選項代碼會轉回中文顯示文字）。
+- **題目分析**（`/teacher/questions`）：每題的作答人數、答對率，以及每個選項各自被選了幾次（可以看出常見的錯誤選項）。
+- **成效總覽**（`/teacher/assessment`）：前測/中測/後測三輪各自的回收份數、量表題（1~5 分）平均分數，以及後測開放式回饋（`most_memorable`）的原文列表。目前是各輪獨立呈現平均值，還沒有做「同一學生前中後測變化」的逐人比較圖，之後有需要可以再加。
+- **打卡審核**（`/teacher/checkins`）：跟原本 `/admin/checkins` 系列 JSON API 背後邏輯相同（`app/eco_checkin.py`），差別是這裡有網頁介面可以直接看照片縮圖、按按鈕通過／拒絕，不用再自己組 HTTP 請求；審核結果一樣會用 LINE Push Message 通知學生。圖片端點 `/teacher/checkins/{id}/image` 只認 cookie，不像 `/admin/checkins/{id}/image` 那樣額外接受網址參數帶 key（教師後台有登入 session 了，不需要那個為了方便瀏覽器開圖而設計的例外，也比較不會讓金鑰留在瀏覽器歷史）。
+- 新增了 `python-multipart` 依賴（`requirements.txt`），FastAPI 的 `Form(...)`（登入表單）需要它才能解析。
+
 ## 管理用 API（暫時性，用於雲端環境沒有 Shell 可下指令時建立學校）
 
 `POST /admin/schools`、`GET /admin/schools`，需帶 Header `X-Admin-Key: <ADMIN_API_KEY>`。範例：
@@ -124,8 +137,8 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 教師後台（總覽、個別學生頁、題目分析、成效總覽；目前只有 `/admin/checkins` 系列陽春 API，沒有網頁介面）
-2. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
+1. 真正的碳足跡計算器（問卷式計算數值，目前只有拍照打卡送分的 bonus 版）
+2. 教師後台目前只有第一版：還沒有「同一學生前中後測變化」的逐人比較圖表，也還沒做真正的帳號系統（登入沿用共用的 `ADMIN_API_KEY`，見上方「教師後台」一節），之後若要多位老師各自登入、分權限管理，需要另外設計
 3. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import Response
-from linebot.v3.messaging import PushMessageRequest, TextMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -9,7 +8,6 @@ from app.assessment import broadcast_assessment_invite
 from app.config import settings
 from app.daily_push import push_daily_question
 from app.database import get_db
-from app.line_client import get_messaging_api
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -123,14 +121,7 @@ def approve_checkin(checkin_id: int, points: int = game_rules.ECO_CHECKIN_POINTS
         raise HTTPException(status_code=404, detail="Checkin not found or already reviewed")
 
     student, new_badges = eco_checkin.approve_checkin(db, checkin, points=points)
-
-    lines = [f"✅ 你的環保打卡通過審核囉！+{points} 能量", f"目前能量：{student.total_points}"]
-    if new_badges:
-        lines.append("\n".join(f"🏅 解鎖新徽章：{name}" for _code, name in new_badges))
-    api = get_messaging_api()
-    api.push_message(
-        PushMessageRequest(to=student.line_user_id, messages=[TextMessage(text="\n\n".join(lines))])
-    )
+    eco_checkin.notify_checkin_approved(student, points, new_badges)
 
     return {"checkin_id": checkin.checkin_id, "status": "approved", "points_awarded": points}
 
@@ -143,13 +134,6 @@ def reject_checkin(checkin_id: int, db: Session = Depends(get_db)):
 
     student = crud.get_student_by_id(db, checkin.student_id)
     eco_checkin.reject_checkin(db, checkin)
-
-    api = get_messaging_api()
-    api.push_message(
-        PushMessageRequest(
-            to=student.line_user_id,
-            messages=[TextMessage(text="很抱歉，這張環保打卡照片沒有通過審核，要不要再試一次呢？📸")],
-        )
-    )
+    eco_checkin.notify_checkin_rejected(student)
 
     return {"checkin_id": checkin.checkin_id, "status": "rejected"}

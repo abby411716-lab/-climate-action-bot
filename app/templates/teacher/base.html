@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}教師後台{% endblock %} · 氣候行動</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: #f5f7f5; color: #1f2a1f;
+  }
+  header.topbar {
+    background: #2f7a3f; color: #fff; padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+  header.topbar h1 { font-size: 1.1rem; margin: 0; font-weight: 600; white-space: nowrap; }
+  nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav.tabs a { color: #eaf3ea; text-decoration: none; padding: 6px 12px; border-radius: 8px; font-size: 0.9rem; }
+  nav.tabs a.active { background: rgba(255,255,255,0.22); font-weight: 600; }
+  nav.tabs a:hover { background: rgba(255,255,255,0.12); }
+  a.logout { color: #eaf3ea; font-size: 0.85rem; text-decoration: none; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px 20px 60px; }
+  .card { background: #fff; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card h2 { font-size: 1rem; margin: 0 0 12px; }
+  .card h3 { font-size: 0.92rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef1ee; vertical-align: top; }
+  th { color: #5a6a5a; font-weight: 600; font-size: 0.78rem; }
+  tr:hover td { background: #f7faf7; }
+  a.row-link { color: #1f5c2b; text-decoration: none; }
+  a.row-link:hover { text-decoration: underline; }
+  .stat-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat-box { flex: 1; min-width: 130px; background: #eef7ee; border-radius: 10px; padding: 14px 16px; }
+  .stat-box .num { font-size: 1.6rem; font-weight: 700; color: #1f5c2b; }
+  .stat-box .label { font-size: 0.78rem; color: #4a5a4a; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.75rem; white-space: nowrap; }
+  .pill.pending { background: #fff4d6; color: #8a6a1f; }
+  .pill.approved { background: #eef7ee; color: #1f5c2b; }
+  .pill.rejected { background: #fdecec; color: #a3231f; }
+  .pill.correct { background: #eef7ee; color: #1f5c2b; }
+  .pill.incorrect { background: #fdecec; color: #a3231f; }
+  .filter-bar { margin-bottom: 14px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn { border: none; border-radius: 8px; padding: 7px 0; font-size: 0.85rem; cursor: pointer; }
+  .btn-approve { background: #2f7a3f; color: #fff; }
+  .btn-reject { background: #fdecec; color: #a3231f; }
+  .empty { color: #8a948a; padding: 20px 0; text-align: center; font-size: 0.9rem; }
+  .checkin-photo { width: 100%; max-width: 176px; border-radius: 8px; display: block; margin-bottom: 8px; object-fit: cover; }
+  .back-link { display: inline-block; margin-bottom: 12px; color: #4a5a4a; text-decoration: none; font-size: 0.85rem; }
+  .meta { font-size: 0.9rem; color: #4a5a4a; line-height: 1.7; }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<header class="topbar">
+  <h1>🌍 教師後台</h1>
+  <nav class="tabs">
+    <a href="/teacher" class="{{ 'active' if active == 'overview' else '' }}">總覽</a>
+    <a href="/teacher/students" class="{{ 'active' if active == 'students' else '' }}">學生</a>
+    <a href="/teacher/questions" class="{{ 'active' if active == 'questions' else '' }}">題目分析</a>
+    <a href="/teacher/assessment" class="{{ 'active' if active == 'assessment' else '' }}">成效總覽</a>
+    <a href="/teacher/checkins" class="{{ 'active' if active == 'checkins' else '' }}">打卡審核</a>
+  </nav>
+  <a class="logout" href="/teacher/logout">登出</a>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>
