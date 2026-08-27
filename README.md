@@ -10,7 +10,8 @@
 - ✅ 教師後台第一版（`/teacher`）：總覽、學生列表／個別學生頁、題目分析、成效總覽、碳足跡、打卡審核，本機已手動測試過所有頁面
 - ✅ 碳足跡打卡計算器（LIFF 表單）：交通／居家能源／垃圾回收共 6 題，算出 0~100 的「綠色分數」，首次完成發能量＋解鎖徽章。改成**獨立的 LIFF App／Endpoint URL**（`CARBON_LIFF_ID`，見「碳足跡打卡計算器」一節），不再跟成效問卷共用；Rich Menu「環保打卡」按鈕也改成 URIAction 直接開啟這個 LIFF。**已部署到 Render 正式環境（Endpoint URL、`CARBON_LIFF_ID` 環境變數都已設定好），並在真實 LINE 裝置上對正式環境完整測試過，確認算分、發能量、解鎖徽章都正常**
 - ✅ 教師後台審核操作紀錄：登入時填姓名（存進 `teacher_name` cookie），打卡通過／拒絕時記錄是哪位老師審核的（`eco_checkins.reviewed_by`），不是真正的帳號分權限，只是知道「誰做的」；本機已測試過中文姓名登入＋審核紀錄正確寫入
-- ⏭️ **下次先做這件事**：教師後台「同一學生前中後測變化」的逐人比較圖表還沒做（見下方「尚未完成」）
+- ✅ 個別學生頁「前中後測變化」折線圖：三輪都問的量表題整理成小型 SVG 折線圖，缺考輪次不誤導成有數值；本機用假資料測過完整/部分填寫兩種情況，用瀏覽器截圖確認排版正常，已部署到 Render
+- ⏭️ **下次先做這件事**：目前沒有立即待辦，只剩 Round2（10/30）題庫用完後要延伸每日測驗內容的長期提醒（見下方「尚未完成」）
 
 ## 環境設定
 
@@ -94,8 +95,9 @@ uvicorn app.main:app --reload
 - **姓名標記（不是權限控管）**：登入時除了金鑰，還要填一個姓名，存進另一個 httpOnly cookie（`teacher_name`）。這個姓名**不驗證身份**、純粹讓審核打卡時知道「是誰做的」——`eco_checkins` 表新增了 `reviewed_by` 欄位，通過／拒絕打卡時會把目前登入的姓名存進去，之後在「打卡審核」列表跟個別學生頁都看得到是哪位老師審核的。cookie value 只能放 latin-1 字元（HTTP header 限制），中文姓名存之前用 `urllib.parse.quote` 編碼、讀出來時 `unquote` 解碼（`app/routers/teacher.py` 的 `_teacher_name()`），直接塞原始中文字串進 `set_cookie` 會讓伺服器噴 500。
 - **總覽**（`/teacher`）：學生總數、待審核打卡數、前測/中測/後測問卷已回收份數，以及各校學生數／已設定暱稱人數／平均能量。
 - **學生列表 ＋ 個別學生頁**（`/teacher/students`、`/teacher/students/{id}`）：列表可用學校篩選；個別學生頁彙整這位學生的能量／連續天數／稱號／徽章、完整答題紀錄、環保打卡紀錄（含照片連結）、以及每一輪成效評估問卷的完整回覆（選項代碼會轉回中文顯示文字）。
+  - **前中後測變化折線圖**（`teacher_dashboard.student_assessment_trend`）：成效評估問卷裡三輪都問的量表題（1~5 分，`assessment_questions.CORE_SCALE_KEYS`，例如「對氣候變遷的了解程度」）才有數值可以比較，整理成小型折線圖顯示在個別學生頁最上方，一題一張小圖（inline SVG，伺服器端算好座標，不需要額外的前端圖表套件）。單選/多選題沒有數值大小可言，維持原本文字列表呈現。缺考的輪次畫成空心點＋「未填」，不連線到相鄰的點，避免暗示一個不存在的數值。
 - **題目分析**（`/teacher/questions`）：每題的作答人數、答對率，以及每個選項各自被選了幾次（可以看出常見的錯誤選項）。
-- **成效總覽**（`/teacher/assessment`）：前測/中測/後測三輪各自的回收份數、量表題（1~5 分）平均分數，以及後測開放式回饋（`most_memorable`）的原文列表。目前是各輪獨立呈現平均值，還沒有做「同一學生前中後測變化」的逐人比較圖，之後有需要可以再加。
+- **成效總覽**（`/teacher/assessment`）：前測/中測/後測三輪各自的回收份數、量表題（1~5 分）平均分數，以及後測開放式回饋（`most_memorable`）的原文列表，各輪獨立呈現平均值（全校/全班的彙整視角）。「同一學生前中後測變化」的逐人折線圖則是在**個別學生頁**（見上方「學生列表 ＋ 個別學生頁」），要看單一學生的變化趨勢時進去看。
 - **打卡審核**（`/teacher/checkins`）：跟原本 `/admin/checkins` 系列 JSON API 背後邏輯相同（`app/eco_checkin.py`），差別是這裡有網頁介面可以直接看照片縮圖、按按鈕通過／拒絕，不用再自己組 HTTP 請求；審核結果一樣會用 LINE Push Message 通知學生。圖片端點 `/teacher/checkins/{id}/image` 只認 cookie，不像 `/admin/checkins/{id}/image` 那樣額外接受網址參數帶 key（教師後台有登入 session 了，不需要那個為了方便瀏覽器開圖而設計的例外，也比較不會讓金鑰留在瀏覽器歷史）。
 - 新增了 `python-multipart` 依賴（`requirements.txt`），FastAPI 的 `Form(...)`（登入表單）需要它才能解析。
 
@@ -153,8 +155,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 教師後台目前只有第一版：還沒有「同一學生前中後測變化」的逐人比較圖表。帳號系統維持共用 `ADMIN_API_KEY` ＋ 登入時填姓名標記操作紀錄（見上方「教師後台」一節），這是刻意的設計決定（不需要分權限管理），如果之後真的需要老師各自獨立登入、分權限，需要另外設計
-2. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
+1. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）
 

@@ -159,6 +159,8 @@ def student_detail(request: Request, student_id: int, db: Session = Depends(get_
             "answer_logs": crud.list_answer_logs_for_student(db, student_id),
             "checkins": crud.list_eco_checkins_for_student(db, student_id),
             "assessment_sections": assessment_sections,
+            "assessment_trend": teacher_dashboard.student_assessment_trend(db, student_id),
+            "trend_chart": teacher_dashboard.TREND_CHART_META,
             "carbon_result": carbon_result,
         },
     )

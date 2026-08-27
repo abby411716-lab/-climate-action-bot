@@ -6,6 +6,32 @@ from sqlalchemy.orm import Session
 
 from app import assessment_questions, carbon_footprint, crud, models
 
+# 個別學生頁「前中後測變化」小圖表的固定版面座標（SVG viewBox 尺寸）。
+# 只有這四題（CORE_SCALE_KEYS）是三輪都問的量表題，1~5 分才有數值可以連成折線；
+# 其他核心題是單選/多選，沒有大小可言，維持原本的文字列表呈現。
+TREND_ROUNDS = ["baseline", "midterm", "posttest"]
+_CHART_W, _CHART_H = 200, 130
+_PLOT_LEFT, _PLOT_RIGHT = 20, 180
+_PLOT_TOP, _PLOT_BOTTOM = 30, 96
+_X_POSITIONS = [_PLOT_LEFT, (_PLOT_LEFT + _PLOT_RIGHT) // 2, _PLOT_RIGHT]
+
+TREND_CHART_META = {
+    "w": _CHART_W,
+    "h": _CHART_H,
+    "plot_left": _PLOT_LEFT,
+    "plot_right": _PLOT_RIGHT,
+    "plot_bottom": _PLOT_BOTTOM,
+}
+
+
+def _value_to_y(value: int) -> float:
+    return _PLOT_TOP + (5 - value) / 4 * (_PLOT_BOTTOM - _PLOT_TOP)
+
+
+_MISSING_Y = (_PLOT_TOP + _PLOT_BOTTOM) / 2  # 缺考的輪次畫在垂直置中，避免誤讀成「接近 1 分」
+
+TREND_CHART_META["grid_ys"] = [round(_value_to_y(v), 1) for v in (5, 3, 1)]
+
 
 def overview_stats(db: Session) -> dict:
     schools = crud.list_schools(db)
@@ -125,6 +151,52 @@ def describe_carbon_footprint_response(response: models.CarbonFootprintResponse)
         value = response.responses[key]
         described.append({"category": q["category"], "text": q["text"], "answer": label_maps[key].get(value, value)})
     return described
+
+
+def student_assessment_trend(db: Session, student_id: int) -> list[dict]:
+    """把學生三輪問卷裡的核心量表題整理成「前中後測變化」折線圖的座標資料。
+
+    每題回傳三個點（baseline/midterm/posttest），缺考的輪次 value 是 None、
+    y 座標退回畫在底部（模板畫成空心點＋「－」，不連線到相鄰的點，避免暗示
+    一個不存在的數值）。segments 只包含兩端都有作答的相鄰點，缺考處線段自然斷開。
+    """
+    responses = {r.assessment_round: r.responses for r in crud.list_assessment_responses_for_student(db, student_id)}
+
+    charts = []
+    for key in assessment_questions.CORE_SCALE_KEYS:
+        q = assessment_questions.QUESTION_DEFS[key]
+        points = []
+        for round_name, x in zip(TREND_ROUNDS, _X_POSITIONS):
+            round_responses = responses.get(round_name)
+            value = round_responses.get(key) if round_responses else None
+            points.append(
+                {
+                    "round_label": assessment_questions.ROUND_LABELS[round_name],
+                    "value": value,
+                    "x": x,
+                    "y": _value_to_y(value) if value is not None else _MISSING_Y,
+                }
+            )
+
+        if not any(p["value"] is not None for p in points):
+            continue
+
+        segments = [
+            f"{points[i]['x']},{points[i]['y']:.1f} {points[i + 1]['x']},{points[i + 1]['y']:.1f}"
+            for i in range(len(points) - 1)
+            if points[i]["value"] is not None and points[i + 1]["value"] is not None
+        ]
+
+        charts.append(
+            {
+                "text": q["text"],
+                "low_label": q["low_label"],
+                "high_label": q["high_label"],
+                "points": points,
+                "segments": segments,
+            }
+        )
+    return charts
 
 
 def describe_assessment_response(assessment_round: str, responses: dict) -> list[dict]:

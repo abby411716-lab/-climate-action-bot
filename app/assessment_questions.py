@@ -216,6 +216,10 @@ _CORE_KEYS = [
     "willingness_to_participate",
 ]
 
+# 核心題裡只有量表題（1~5 分）有數值大小可以比較，適合拿來畫「前中後測變化」折線圖；
+# 單選/多選題沒有數值意義，維持原本的文字列表呈現（見 teacher_dashboard.describe_assessment_response）。
+CORE_SCALE_KEYS = [k for k in _CORE_KEYS if QUESTION_DEFS[k]["type"] == "scale"]
+
 ROUND_LABELS = {"baseline": "前測", "midterm": "中測", "posttest": "後測"}
 
 ROUNDS: dict[str, list[str]] = {
