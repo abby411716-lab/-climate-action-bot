@@ -2,14 +2,14 @@
 
 依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援、前測/中測/後測成效評估問卷（LIFF 表單）、碳足跡打卡計算器（LIFF 表單，算出「綠色分數」），以及教師後台網頁（總覽／學生列表與個別學生頁／題目分析／成效總覽／碳足跡／打卡審核）。
 
-## 目前進度快照（2026-08-26）
+## 目前進度快照（2026-08-27）
 
 - ✅ 30 題正式題庫已排定實際發送日期（見下方「每日推送」），本機／Render 兩邊資料庫同步
 - ✅ 每日推送排程雙保險：服務內建 APScheduler ＋ GitHub Actions 外部 cron，已各自手動觸發驗證成功
 - ✅ 成效評估問卷（LIFF 表單）：前測/中測/後測三輪，已部署上線並在真實裝置上完整測試過一輪，可正常送出
 - ✅ 教師後台第一版（`/teacher`）：總覽、學生列表／個別學生頁、題目分析、成效總覽、碳足跡、打卡審核，本機已手動測試過所有頁面
-- ✅ 碳足跡打卡計算器（LIFF 表單）：交通／居家能源／垃圾回收共 6 題，算出 0~100 的「綠色分數」，首次完成發能量＋解鎖徽章，本機已用假資料測過完整流程（第一次發獎勵、重填只更新分數不重複發獎勵）；**尚未在真實 LINE 裝置上實測過**
-- ⏭️ **下次先做這件事**：用手機在真實 LINE 裝置上實際測試一次碳足跡打卡計算器（開連結填答、確認算分跟畫面正確、確認第一次完成有發能量+解鎖徽章、確認重新填寫會更新分數不重複發獎勵），目前只在本機用假資料驗證過邏輯，還沒有人在真正的 LIFF 環境裡走過一次
+- ✅ 碳足跡打卡計算器（LIFF 表單）：交通／居家能源／垃圾回收共 6 題，算出 0~100 的「綠色分數」，首次完成發能量＋解鎖徽章。改成**獨立的 LIFF App／Endpoint URL**（`CARBON_LIFF_ID`，見「碳足跡打卡計算器」一節），不再跟成效問卷共用；Rich Menu「環保打卡」按鈕也改成 URIAction 直接開啟這個 LIFF。**已在真實 LINE 裝置上實測過一輪，確認算分、發能量、解鎖徽章都正常**
+- ⏭️ **下次先做這件事**：碳足跡計算器目前 Endpoint URL 還是指向本機測試用的 cloudflared tunnel 網址，正式對學生發送前要先改回 Render 正式網址（`https://climate-action-bot.onrender.com/liff/carbon-footprint`），並確認 Render 環境變數也設定了 `CARBON_LIFF_ID`（見下方「尚未完成」）
 - 之後：教師後台目前只有第一版功能，還沒有多帳號登入權限系統（見下方「尚未完成」）
 
 ## 環境設定
@@ -73,19 +73,18 @@ uvicorn app.main:app --reload
 
 ## Rich Menu ＋ 暱稱 ＋ 環保打卡 ＋ 排行榜
 
-- `python -m scripts.setup_rich_menu`：產生一張 2500x1686、2x2 四宮格的選單圖片（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。四個按鈕都是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理：
+- `python -m scripts.setup_rich_menu`：產生一張 2500x1686、2x2 四宮格的選單圖片（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。三個按鈕是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理；`環保打卡` 這格改用 URIAction，點下去不經過 webhook，直接開啟碳足跡打卡計算器的 LIFF（`app/carbon_footprint.build_carbon_footprint_url()`，見下方「碳足跡打卡計算器」一節）：
   - `基本資料`：回覆就讀學校
   - `目前狀態`：回覆身分／能量／連續天數／徽章（跟文字訊息查詢共用 `_status_text`）
-  - `環保打卡`：回覆打卡說明（實際打卡是直接傳照片，不是點按鈕）
+  - `環保打卡`：直接開啟碳足跡打卡計算器 LIFF（URIAction，非 postback）
   - `排行榜`：回覆該校前 10 名（暱稱＋能量）
 - 暱稱設定：學生選完學校後，下一則文字訊息會被當成暱稱存起來（`students.nickname`），設定前選單功能會提示要先設定暱稱。暱稱只存在我們資料庫，跟 LINE 顯示名稱無關，目的是排行榜不曝露 LINE 身份。
-- 環保打卡（`app/eco_checkin.py` + `students` 傳圖片訊息）：學生傳照片給 bot → 用 LINE Blob API 下載原圖 → 用 Pillow 壓縮成長邊 ≤1000px、JPEG quality 70 → 存進新的 `eco_checkins` 表（`status="pending"`）。**設計上刻意先審核再發能量**：
+- **拍照打卡**（`app/eco_checkin.py` + 學生傳圖片訊息，跟碳足跡計算器是分開的機制，見下方「碳足跡打卡計算器」一節的說明）：學生傳照片給 bot → 用 LINE Blob API 下載原圖 → 用 Pillow 壓縮成長邊 ≤1000px、JPEG quality 70 → 存進新的 `eco_checkins` 表（`status="pending"`）。這個機制目前**不再掛在 Rich Menu 按鈕上**（`環保打卡` 格子已改成開啟碳足跡計算器），純粹靠學生自己傳照片觸發，功能本身不受影響。**設計上刻意先審核再發能量**：
   - `GET /admin/checkins?status=pending`（帶 `X-Admin-Key`）：列出待審核打卡，含 `image_url` 可直接開圖
   - `GET /admin/checkins/{id}/image`：回傳圖片本身，因為要給老師直接在瀏覽器開連結看照片，所以這個端點例外允許用網址參數 `?admin_key=` 代替 Header（其他 admin 端點都只認 Header）——僅限這個用途，網址會留在瀏覽器歷史/伺服器 log，不要外流
   - `POST /admin/checkins/{id}/approve`（可帶 `?points=`，預設 `game_rules.ECO_CHECKIN_POINTS=15`）：發放能量、檢查是否解鎖 `eco_first`／`eco_10` 徽章，並用 LINE Push Message 通知學生
   - `POST /admin/checkins/{id}/reject`：標記未通過，Push 通知學生可以再試一次
   - 打卡目前**不影響**每日答題的連續天數（streak 只跟每日測驗有關）
-- **這只是「碳足跡計算器」裡「拍照打卡送分」的 bonus 版**；真正會計算數值的碳足跡問卷（規格書時程表 W2-3 上線那條線）還沒做，之後要做再另外討論
 
 ## 教師後台
 
@@ -142,7 +141,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 交通方式／居家能源／垃圾與資源回收三大類共 6 題單選，每題依生活習慣打 0~3 分，加總換算成 0~100 的「綠色分數」，對應一個等級與故事文案（風格比照 `app/game_rules.py` 的稱號設計）。**刻意不做成精確的公斤 CO2e 排放量估算**——那需要具體、有公信力的排放係數，容易被質疑不準確——用意是讓學生反思生活習慣、看到自己的努力方向，不是要精算數字。跟拍照打卡（`app/eco_checkin.py`）是分開的兩個機制：打卡是單次行動記錄、需要老師審核；碳足跡計算器是一次性的生活習慣自評，送出立即算分不用審核。
 
 - `app/carbon_footprint.py`：題目定義（`QUESTIONS`，含每個選項的分數）、算分邏輯（`score_answers` / `green_score` / `current_level`）、首次完成的獎勵邏輯（`award_first_completion`）都集中在這裡
-- **跟成效評估問卷共用同一個 LIFF App**：沒有另外申請新的 LINE Login channel／LIFF App，而是沿用 `.env` 裡同一個 `LIFF_ID`、同一個 `/liff/assessment` 頁面殼子（`app/templates/assessment.html`）——網址帶 `?form=carbon_footprint` 而不是 `?round=xxx` 的話，前端 JS 會改抓 `/liff/carbon-footprint/questions`、送到 `/liff/carbon-footprint/submit`，畫面也會改成算分結果（分數圓圈＋等級＋首次完成的獎勵提示），而不是單純的「已送出」訊息。這是為了少一道 LINE Developers Console 手動設定的步驟，代價是 `assessment.html` 這個檔名現在其實服務兩種不同的表單，讀程式碼時要留意
+- **獨立的 LIFF App／Endpoint URL**：另外申請了一個獨立的 LINE Login channel／LIFF App，LIFF ID 存在 `.env` 的 `CARBON_LIFF_ID`，對應 `GET /liff/carbon-footprint`（Endpoint URL 要設成 `https://climate-action-bot.onrender.com/liff/carbon-footprint`）。跟成效評估問卷（`/liff/assessment`、`LIFF_ID`）是兩個完全分開的 LIFF App，改任一邊的 Endpoint URL（例如本機測試接 ngrok/cloudflared tunnel）都不會影響另一邊。頁面模板仍共用 `app/templates/assessment.html` 這個殼子，但不再靠網址 query string 分流，而是伺服器端渲染時直接傳入 `mode`（`"assessment"` 或 `"carbon_footprint"`），前端 JS 讀這個值決定要打 `/liff/carbon-footprint/questions` 還是 `/liff/assessment/questions`，畫面也會改成算分結果（分數圓圈＋等級＋首次完成的獎勵提示）而不是單純的「已送出」訊息
 - 身份驗證方式跟成效評估問卷完全一樣：後端用 access token 換驗證過的 LINE `userId`，不信任前端回報的任何身份欄位
 - **可以重複填寫**：`crud.upsert_carbon_footprint_response` 每位學生只留一筆最新結果，重填會覆蓋分數重新計算；但只有**第一次**送出才會發能量（`game_rules.CARBON_CALC_POINTS`，目前 20）、解鎖「🧮 碳足跡先鋒」徽章，重填不會重複發獎勵
 - 推播計算器連結：`POST /admin/push-carbon-footprint`（帶 `X-Admin-Key`）廣播給所有好友，教師後台「碳足跡」頁面（`/teacher/carbon-footprint`）也有對應按鈕，不用開終端機
@@ -152,7 +151,8 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 ## 尚未完成（規格書第 10 節後續步驟）
 
 1. 教師後台目前只有第一版：還沒有「同一學生前中後測變化」的逐人比較圖表，也還沒做真正的帳號系統（登入沿用共用的 `ADMIN_API_KEY`，見上方「教師後台」一節），之後若要多位老師各自登入、分權限管理，需要另外設計
-2. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
+2. 碳足跡計算器的獨立 LIFF App 已建立、`.env` 已填入 `CARBON_LIFF_ID`（`render.yaml` 也已同步加上這個值），也已在真實裝置測試通過。但**正式上線前還要做兩件事**：(a) 需要 commit/push 這次的改動，讓 `render.yaml` 裡新增的 `CARBON_LIFF_ID` 真的部署到 Render（改 render.yaml 不會自動生效，要等下次部署）；(b) LIFF App 的 Endpoint URL 目前設成本機測試用的 cloudflared tunnel 網址，要記得改回 `https://climate-action-bot.onrender.com/liff/carbon-footprint`
+3. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）
 

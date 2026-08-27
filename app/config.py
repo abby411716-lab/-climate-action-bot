@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./climate_action.db"
     admin_api_key: str = ""
     liff_id: str = ""
+    carbon_liff_id: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

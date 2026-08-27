@@ -23,12 +23,24 @@ def assessment_form(request: Request):
     （LINE 會把它編碼進 liff.state，要等瀏覽器裡的 liff.init() 執行完才會補回網址），
     所以「要顯示哪一輪問卷」這件事挪到前端 JS 處理：liff.init() 完成後才從網址讀 round，
     再打 /liff/assessment/questions 拿題目動態把表單畫出來，而不是在這裡用 Jinja2 先渲染好。
-
-    這個殼子頁面現在也拿來顯示碳足跡打卡計算器：網址帶 `?form=carbon_footprint` 而不是
-    `?round=xxx` 的話，前端 JS 會改打 /liff/carbon-footprint/questions。兩者共用同一個
-    LIFF App／同一個 Endpoint URL，不用再另外申請一個新的 LINE Login channel。
     """
-    return templates.TemplateResponse("assessment.html", {"request": request, "liff_id": settings.liff_id})
+    return templates.TemplateResponse(
+        "assessment.html", {"request": request, "liff_id": settings.liff_id, "mode": "assessment"}
+    )
+
+
+@router.get("/carbon-footprint")
+def carbon_footprint_form(request: Request):
+    """碳足跡打卡計算器獨立的 LIFF App／Endpoint URL（獨立的 LINE Login channel，
+
+    對應 .env 的 CARBON_LIFF_ID），跟成效評估問卷（/liff/assessment，LIFF_ID）分開，
+    改哪一個都不會影響另一個。頁面模板共用 assessment.html 這個殼子，但這裡不需要
+    像 /assessment 那樣等前端從 query string 讀参數才知道要顯示什麼——路徑本身就決定了
+    是碳足跡計算器，直接在伺服器端把 mode 傳給前端即可。
+    """
+    return templates.TemplateResponse(
+        "assessment.html", {"request": request, "liff_id": settings.carbon_liff_id, "mode": "carbon_footprint"}
+    )
 
 
 @router.get("/assessment/questions")

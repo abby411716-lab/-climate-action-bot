@@ -13,19 +13,29 @@ sys.path.append(".")
 
 from PIL import Image, ImageDraw, ImageFont
 
-from linebot.v3.messaging import PostbackAction, RichMenuArea, RichMenuBounds, RichMenuRequest, RichMenuSize
+from linebot.v3.messaging import (
+    PostbackAction,
+    RichMenuArea,
+    RichMenuBounds,
+    RichMenuRequest,
+    RichMenuSize,
+    URIAction,
+)
+from app.carbon_footprint import build_carbon_footprint_url
 from app.line_client import get_messaging_api, get_messaging_blob_api
 
 WIDTH, HEIGHT = 2500, 1686
 HALF_W, HALF_H = WIDTH // 2, HEIGHT // 2
 
-# (選單按鈕標籤／postback display_text 用, 圖片上畫的文字, 說明, 底色, postback data)
+# (選單按鈕標籤, 圖片上畫的文字, 說明, 底色, postback data)
 # 圖片文字刻意不含 emoji：Windows 中文字型（msjh.ttc）沒有 emoji 字形，畫出來會變成方框；
 # emoji 留在 label / display_text，聊天訊息由 LINE 客戶端自己渲染 emoji，不受字型限制。
+# postback data 為 None 的那格改用 URIAction，點下去直接開對應網址（例如碳足跡計算器 LIFF），
+# 不透過 webhook postback。
 CELLS = [
     ("🏫 基本資料", "基本資料", "查看就讀學校", (76, 175, 80), "menu|profile"),
     ("🌟 目前狀態", "目前狀態", "能量／連續天數／徽章", (255, 152, 0), "menu|status"),
-    ("📸 環保打卡", "環保打卡", "拍照上傳換能量", (33, 150, 243), "menu|checkin_info"),
+    ("🧮 環保打卡", "環保打卡", "算出你的綠色分數", (33, 150, 243), None),
     ("🏆 排行榜", "排行榜", "看看誰是氣候英雄", (156, 39, 176), "menu|leaderboard"),
 ]
 
@@ -87,10 +97,14 @@ def main():
     areas = []
     positions = [(0, 0), (HALF_W, 0), (0, HALF_H), (HALF_W, HALF_H)]
     for (x, y), (label, _image_text, _desc, _color, data) in zip(positions, CELLS):
+        if data is None:
+            action = URIAction(label=label[:20], uri=build_carbon_footprint_url())
+        else:
+            action = PostbackAction(label=label[:20], data=data, display_text=label)
         areas.append(
             RichMenuArea(
                 bounds=RichMenuBounds(x=x, y=y, width=HALF_W, height=HALF_H),
-                action=PostbackAction(label=label[:20], data=data, display_text=label),
+                action=action,
             )
         )
 

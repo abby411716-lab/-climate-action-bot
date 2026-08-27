@@ -4,9 +4,11 @@
 刻意不做成精確的公斤 CO2e 估算——那需要具體、有公信力的排放係數，容易被質疑不準確——
 而是相對分數，重點是讓學生反思自己的生活習慣、看到努力方向，不是要精算數字。
 
-跟成效評估問卷（app/assessment_questions.py）共用同一個 LIFF App／同一個 /liff/assessment
-頁面殼子，靠網址帶的是 `?round=xxx` 還是 `?form=carbon_footprint` 讓前端 JS 決定要顯示哪種表單，
-這樣不用再另外申請一個新的 LINE Login channel／LIFF App。
+獨立的 LIFF App／Endpoint URL（`/liff/carbon-footprint`，對應 .env 的 CARBON_LIFF_ID），
+跟成效評估問卷（app/assessment_questions.py，走 /liff/assessment、LIFF_ID）分開，
+改哪一邊的 LIFF Endpoint URL（例如本機測試接 ngrok/cloudflared tunnel）都不會互相影響。
+頁面模板仍共用 app/templates/assessment.html 這個殼子，靠伺服器端渲染的 mode 變數
+決定要顯示哪種表單。
 """
 
 from typing import Any
@@ -171,7 +173,7 @@ def award_first_completion(db: Session, student: models.Student) -> list[tuple[s
 
 
 def build_carbon_footprint_url() -> str:
-    return f"{LIFF_BASE_URL}/{settings.liff_id}?form=carbon_footprint"
+    return f"{LIFF_BASE_URL}/{settings.carbon_liff_id}"
 
 
 def broadcast_carbon_footprint_invite() -> None:

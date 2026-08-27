@@ -78,6 +78,7 @@
 
 <script>
 const LIFF_ID = "{{ liff_id }}";
+const MODE = "{{ mode }}";
 let ASSESSMENT_ROUND = null;
 
 function el(tag, attrs = {}, children = []) {
@@ -332,8 +333,7 @@ async function init() {
       liff.login();
       return;
     }
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("form") === "carbon_footprint") {
+    if (MODE === "carbon_footprint") {
       await loadCarbonFootprint();
     } else {
       await loadQuestions();
