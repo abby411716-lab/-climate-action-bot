@@ -8,9 +8,8 @@
 - ✅ 每日推送排程雙保險：服務內建 APScheduler ＋ GitHub Actions 外部 cron，已各自手動觸發驗證成功
 - ✅ 成效評估問卷（LIFF 表單）：前測/中測/後測三輪，已部署上線並在真實裝置上完整測試過一輪，可正常送出
 - ✅ 教師後台第一版（`/teacher`）：總覽、學生列表／個別學生頁、題目分析、成效總覽、碳足跡、打卡審核，本機已手動測試過所有頁面
-- ✅ 碳足跡打卡計算器（LIFF 表單）：交通／居家能源／垃圾回收共 6 題，算出 0~100 的「綠色分數」，首次完成發能量＋解鎖徽章。改成**獨立的 LIFF App／Endpoint URL**（`CARBON_LIFF_ID`，見「碳足跡打卡計算器」一節），不再跟成效問卷共用；Rich Menu「環保打卡」按鈕也改成 URIAction 直接開啟這個 LIFF。**已在真實 LINE 裝置上實測過一輪，確認算分、發能量、解鎖徽章都正常**
-- ⏭️ **下次先做這件事**：碳足跡計算器目前 Endpoint URL 還是指向本機測試用的 cloudflared tunnel 網址，正式對學生發送前要先改回 Render 正式網址（`https://climate-action-bot.onrender.com/liff/carbon-footprint`），並確認 Render 環境變數也設定了 `CARBON_LIFF_ID`（見下方「尚未完成」）
-- 之後：教師後台目前只有第一版功能，還沒有多帳號登入權限系統（見下方「尚未完成」）
+- ✅ 碳足跡打卡計算器（LIFF 表單）：交通／居家能源／垃圾回收共 6 題，算出 0~100 的「綠色分數」，首次完成發能量＋解鎖徽章。改成**獨立的 LIFF App／Endpoint URL**（`CARBON_LIFF_ID`，見「碳足跡打卡計算器」一節），不再跟成效問卷共用；Rich Menu「環保打卡」按鈕也改成 URIAction 直接開啟這個 LIFF。**已部署到 Render 正式環境（Endpoint URL、`CARBON_LIFF_ID` 環境變數都已設定好），並在真實 LINE 裝置上對正式環境完整測試過，確認算分、發能量、解鎖徽章都正常**
+- ⏭️ **下次先做這件事**：教師後台目前只有第一版功能，還沒有多帳號登入權限系統（登入沿用共用的 `ADMIN_API_KEY`，見下方「尚未完成」），如果有多位老師要各自登入管理，需要先設計這塊
 
 ## 環境設定
 
@@ -124,6 +123,8 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 （本專案一開始用本機 SQLite 起步是延續規格書第 7 節的建議，但實測發現 Render 免費方案的 Web Service 檔案系統在服務休眠喚醒時會重置，SQLite 檔案跟著消失，所以提早換成 PostgreSQL；本機開發若不想裝 PostgreSQL，`DATABASE_URL` 留空或設回 `sqlite:///./climate_action.db` 仍可用 SQLite。）
 
+**踩過的坑：`render.yaml` 新增環境變數不會自動同步到已經建立好的服務。** 加碳足跡計算器的 `CARBON_LIFF_ID` 時，以為改完 `render.yaml`（見上方 `envVars`）push 上去、Render 重新部署就會自動帶上這個新的環境變數，結果部署完 Render 上這個值還是空的——`render.yaml` 的 Blueprint 同步似乎只在**第一次建立服務**時把 `envVars` 套進去，之後 push 新增的變數要自己到 Render Dashboard → 該服務 → **Environment** 分頁手動加一次（存檔後會自動觸發重新部署）。之後如果又要加新的環境變數，記得除了改 `render.yaml`（讓文件跟未來全新部署保持一致）之外，也要手動去 Dashboard 補一次。
+
 ## 成效評估問卷（LIFF 表單）
 
 前測（baseline）／中測（midterm）／後測（posttest）三輪問卷，題目改編自使用者提供的「青少年氣候行為調查」（教育部青年發展署 Young 飛計畫），內容是自我覺察／態度／行為／動機題（沒有標準答案），跟每日測驗的客觀對錯（`answer_logs`）是分開的兩種資料。
@@ -151,8 +152,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 ## 尚未完成（規格書第 10 節後續步驟）
 
 1. 教師後台目前只有第一版：還沒有「同一學生前中後測變化」的逐人比較圖表，也還沒做真正的帳號系統（登入沿用共用的 `ADMIN_API_KEY`，見上方「教師後台」一節），之後若要多位老師各自登入、分權限管理，需要另外設計
-2. 碳足跡計算器的獨立 LIFF App 已建立、`.env` 已填入 `CARBON_LIFF_ID`（`render.yaml` 也已同步加上這個值），也已在真實裝置測試通過。但**正式上線前還要做兩件事**：(a) 需要 commit/push 這次的改動，讓 `render.yaml` 裡新增的 `CARBON_LIFF_ID` 真的部署到 Render（改 render.yaml 不會自動生效，要等下次部署）；(b) LIFF App 的 Endpoint URL 目前設成本機測試用的 cloudflared tunnel 網址，要記得改回 `https://climate-action-bot.onrender.com/liff/carbon-footprint`
-3. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
+2. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）
 
