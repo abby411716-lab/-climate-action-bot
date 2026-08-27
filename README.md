@@ -49,7 +49,11 @@ python -m scripts.seed_school "南投高中" nantou_high
 uvicorn app.main:app --reload
 ```
 
-啟動後 webhook 端點為 `http://localhost:8000/webhook`。本機測試需要用 ngrok（或類似工具）把這個網址對外公開，再到 LINE Developers Console 的 Messaging API 設定頁把 Webhook URL 設成 `https://<你的ngrok網址>/webhook` 並啟用 Webhook。
+啟動後 webhook 端點為 `http://localhost:8000/webhook`。
+
+**這一節只給要改程式碼、在自己電腦上先測試的開發者用**；如果只是要部署/運作這個系統（管理學校、審核打卡等），不需要做這件事，直接看下方「部署到 Render」，正式環境的 webhook 端點固定是 Render 網址，不會用到本機或 ngrok。
+
+開發者本機測試 webhook 需要用 ngrok（或類似工具，例如 cloudflared）把這個網址對外公開，再到 LINE Developers Console 的 Messaging API 設定頁把 Webhook URL **暫時**設成 `https://<你的ngrok網址>/webhook` 並啟用 Webhook；測試完記得把 Webhook URL 改回 Render 正式網址，避免正式環境收不到訊息。
 
 ## 目前功能
 
@@ -138,7 +142,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 - **身份識別但不顯示**：表單本身不問姓名/帳號（維持匿名體感），但後端會用 `liff.getAccessToken()` 拿到的 access token 呼叫 LINE 的 `GET /v2/profile`（`app/line_client.get_liff_user_id`）換回經過驗證的 `userId`，藉此對應到 `students` 表裡的學生——**刻意不信任前端回傳的任何身份欄位**，因為 `liff.getProfile()` 這類前端呼叫的結果理論上可能被竄改，只有後端自己拿 token 去跟 LINE 換到的 userId 才可信
 - 同一個學生同一輪次重複送出，會覆蓋掉舊答案（`crud.upsert_assessment_response`，靠 `assessment_responses` 的 `(student_id, assessment_round)` unique constraint 判斷）
 - 推播問卷連結：`POST /admin/push-assessment?round=baseline`（帶 `X-Admin-Key`）廣播問卷連結給所有好友。跟每日測驗不同，前測/中測/後測只知道「哪一週」要發（見下方行程），沒有精確到哪一天，所以做成手動觸發，由管理員自己挑那一週裡的哪一天發送
-- **LIFF App 設定**：LIFF App 是掛在獨立的 LINE Login channel 底下（LINE 現在不允許 LIFF 直接掛在 Messaging API channel），LIFF ID 存在 `.env` 的 `LIFF_ID`。LIFF App 的 **Endpoint URL** 要設成 `https://climate-action-bot.onrender.com/liff/assessment`（本機測試則設本機的 ngrok 網址 + `/liff/assessment`）
+- **LIFF App 設定**：LIFF App 是掛在獨立的 LINE Login channel 底下（LINE 現在不允許 LIFF 直接掛在 Messaging API channel），LIFF ID 存在 `.env` 的 `LIFF_ID`。LIFF App 的 **Endpoint URL** 正式環境要設成 `https://climate-action-bot.onrender.com/liff/assessment`，這是平常應該固定指著的值。**只有要改程式碼、想在自己電腦上先測試表單改動的開發者**，才需要把 Endpoint URL 暫時改成本機的 ngrok/cloudflared tunnel 網址 + `/liff/assessment`；測試完務必改回 Render 網址，否則正式環境的表單會打不開（這裡改掉會直接影響所有學生，之前碳足跡計算器就踩過一次）。純粹要部署/運作這個系統不需要碰這裡。
 - **`round` 這個 query 參數是前端處理的，不是後端**：LINE 從 `https://liff.line.me/{LIFF_ID}?round=baseline` 轉址過來時，不保證第一次打到後端的請求就帶著 `?round=baseline`（LINE 會先把它編碼進 `liff.state`，等瀏覽器裡的 `liff.init()` 執行完才會把網址補回正確的 query string）。所以 `GET /liff/assessment` 不吃 `round` 參數、一律回同一個空殼頁面；等 JS 端 `liff.init()` 完成後才從 `location.search` 讀 `round`，再打 `GET /liff/assessment/questions?round=xxx`（回傳題目 JSON）動態把表單畫出來。踩過這個坑：一開始讓後端直接用 `round: str` 當必填 query 參數、伺服器端 Jinja2 直接渲染，結果 LIFF 開出來直接 422 缺參數
 
 ## 碳足跡打卡計算器（LIFF 表單）
@@ -146,7 +150,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 交通方式／居家能源／垃圾與資源回收三大類共 6 題單選，每題依生活習慣打 0~3 分，加總換算成 0~100 的「綠色分數」，對應一個等級與故事文案（風格比照 `app/game_rules.py` 的稱號設計）。**刻意不做成精確的公斤 CO2e 排放量估算**——那需要具體、有公信力的排放係數，容易被質疑不準確——用意是讓學生反思生活習慣、看到自己的努力方向，不是要精算數字。跟拍照打卡（`app/eco_checkin.py`）是分開的兩個機制：打卡是單次行動記錄、需要老師審核；碳足跡計算器是一次性的生活習慣自評，送出立即算分不用審核。
 
 - `app/carbon_footprint.py`：題目定義（`QUESTIONS`，含每個選項的分數）、算分邏輯（`score_answers` / `green_score` / `current_level`）、首次完成的獎勵邏輯（`award_first_completion`）都集中在這裡
-- **獨立的 LIFF App／Endpoint URL**：另外申請了一個獨立的 LINE Login channel／LIFF App，LIFF ID 存在 `.env` 的 `CARBON_LIFF_ID`，對應 `GET /liff/carbon-footprint`（Endpoint URL 要設成 `https://climate-action-bot.onrender.com/liff/carbon-footprint`）。跟成效評估問卷（`/liff/assessment`、`LIFF_ID`）是兩個完全分開的 LIFF App，改任一邊的 Endpoint URL（例如本機測試接 ngrok/cloudflared tunnel）都不會影響另一邊。頁面模板仍共用 `app/templates/assessment.html` 這個殼子，但不再靠網址 query string 分流，而是伺服器端渲染時直接傳入 `mode`（`"assessment"` 或 `"carbon_footprint"`），前端 JS 讀這個值決定要打 `/liff/carbon-footprint/questions` 還是 `/liff/assessment/questions`，畫面也會改成算分結果（分數圓圈＋等級＋首次完成的獎勵提示）而不是單純的「已送出」訊息
+- **獨立的 LIFF App／Endpoint URL**：另外申請了一個獨立的 LINE Login channel／LIFF App，LIFF ID 存在 `.env` 的 `CARBON_LIFF_ID`，對應 `GET /liff/carbon-footprint`。Endpoint URL 正式環境固定要設成 `https://climate-action-bot.onrender.com/liff/carbon-footprint`；只有開發者要在自己電腦上先測試表單改動時，才需要暫時改成本機的 ngrok/cloudflared tunnel 網址，測完務必改回 Render 網址。跟成效評估問卷（`/liff/assessment`、`LIFF_ID`）是兩個完全分開的 LIFF App，改任一邊的 Endpoint URL 都不會影響另一邊。頁面模板仍共用 `app/templates/assessment.html` 這個殼子，但不再靠網址 query string 分流，而是伺服器端渲染時直接傳入 `mode`（`"assessment"` 或 `"carbon_footprint"`），前端 JS 讀這個值決定要打 `/liff/carbon-footprint/questions` 還是 `/liff/assessment/questions`，畫面也會改成算分結果（分數圓圈＋等級＋首次完成的獎勵提示）而不是單純的「已送出」訊息
 - 身份驗證方式跟成效評估問卷完全一樣：後端用 access token 換驗證過的 LINE `userId`，不信任前端回報的任何身份欄位
 - **可以重複填寫**：`crud.upsert_carbon_footprint_response` 每位學生只留一筆最新結果，重填會覆蓋分數重新計算；但只有**第一次**送出才會發能量（`game_rules.CARBON_CALC_POINTS`，目前 20）、解鎖「🧮 碳足跡先鋒」徽章，重填不會重複發獎勵
 - 推播計算器連結：`POST /admin/push-carbon-footprint`（帶 `X-Admin-Key`）廣播給所有好友，教師後台「碳足跡」頁面（`/teacher/carbon-footprint`）也有對應按鈕，不用開終端機
