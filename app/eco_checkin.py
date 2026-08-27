@@ -20,11 +20,14 @@ def compress_image(data: bytes, max_side: int = 1000, quality: int = 70) -> byte
 
 
 def approve_checkin(
-    db: Session, checkin: models.EcoCheckin, points: int = game_rules.ECO_CHECKIN_POINTS
+    db: Session,
+    checkin: models.EcoCheckin,
+    points: int = game_rules.ECO_CHECKIN_POINTS,
+    reviewed_by: str | None = None,
 ) -> tuple[models.Student, list[tuple[str, str]]]:
     """老師審核通過：發放能量、檢查是否解鎖新徽章（不影響每日答題的連續天數）。"""
     student = crud.get_student_by_id(db, checkin.student_id)
-    crud.finalize_eco_checkin(db, checkin, status="approved", points_awarded=points)
+    crud.finalize_eco_checkin(db, checkin, status="approved", points_awarded=points, reviewed_by=reviewed_by)
 
     new_points = student.total_points + points
     stats = {
@@ -46,8 +49,8 @@ def approve_checkin(
     return student, new_badges
 
 
-def reject_checkin(db: Session, checkin: models.EcoCheckin) -> None:
-    crud.finalize_eco_checkin(db, checkin, status="rejected", points_awarded=0)
+def reject_checkin(db: Session, checkin: models.EcoCheckin, reviewed_by: str | None = None) -> None:
+    crud.finalize_eco_checkin(db, checkin, status="rejected", points_awarded=0, reviewed_by=reviewed_by)
 
 
 def notify_checkin_approved(student: models.Student, points: int, new_badges: list[tuple[str, str]]) -> None:

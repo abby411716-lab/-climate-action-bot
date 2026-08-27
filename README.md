@@ -9,7 +9,8 @@
 - ✅ 成效評估問卷（LIFF 表單）：前測/中測/後測三輪，已部署上線並在真實裝置上完整測試過一輪，可正常送出
 - ✅ 教師後台第一版（`/teacher`）：總覽、學生列表／個別學生頁、題目分析、成效總覽、碳足跡、打卡審核，本機已手動測試過所有頁面
 - ✅ 碳足跡打卡計算器（LIFF 表單）：交通／居家能源／垃圾回收共 6 題，算出 0~100 的「綠色分數」，首次完成發能量＋解鎖徽章。改成**獨立的 LIFF App／Endpoint URL**（`CARBON_LIFF_ID`，見「碳足跡打卡計算器」一節），不再跟成效問卷共用；Rich Menu「環保打卡」按鈕也改成 URIAction 直接開啟這個 LIFF。**已部署到 Render 正式環境（Endpoint URL、`CARBON_LIFF_ID` 環境變數都已設定好），並在真實 LINE 裝置上對正式環境完整測試過，確認算分、發能量、解鎖徽章都正常**
-- ⏭️ **下次先做這件事**：教師後台目前只有第一版功能，還沒有多帳號登入權限系統（登入沿用共用的 `ADMIN_API_KEY`，見下方「尚未完成」），如果有多位老師要各自登入管理，需要先設計這塊
+- ✅ 教師後台審核操作紀錄：登入時填姓名（存進 `teacher_name` cookie），打卡通過／拒絕時記錄是哪位老師審核的（`eco_checkins.reviewed_by`），不是真正的帳號分權限，只是知道「誰做的」；本機已測試過中文姓名登入＋審核紀錄正確寫入
+- ⏭️ **下次先做這件事**：教師後台「同一學生前中後測變化」的逐人比較圖表還沒做（見下方「尚未完成」）
 
 ## 環境設定
 
@@ -89,7 +90,8 @@ uvicorn app.main:app --reload
 
 網頁介面，路徑 `/teacher`（例如本機 `http://localhost:8000/teacher`，或部署後 `https://climate-action-bot.onrender.com/teacher`），程式在 `app/routers/teacher.py`（路由與畫面）＋ `app/teacher_dashboard.py`（統計彙整邏輯，讓路由檔只處理請求/回應）＋ `app/templates/teacher/`（Jinja2 樣板）。
 
-- **登入方式**：沿用既有的 `ADMIN_API_KEY`（跟 `/admin` 系列 JSON API 共用同一把金鑰），不是另外的帳號系統。`/teacher/login` 頁面輸入金鑰後，正確的話會存進一個 httpOnly cookie（`teacher_key`，效期 30 天），之後每個 `/teacher/*` 頁面都是看這個 cookie 判斷是否已登入，不用像 `/admin` API 那樣每次手動帶 `X-Admin-Key` Header。`/teacher/logout` 清掉 cookie。
+- **登入方式**：沿用既有的 `ADMIN_API_KEY`（跟 `/admin` 系列 JSON API 共用同一把金鑰），不是另外的帳號系統，所有老師權限相同。`/teacher/login` 頁面輸入金鑰後，正確的話會存進一個 httpOnly cookie（`teacher_key`，效期 30 天），之後每個 `/teacher/*` 頁面都是看這個 cookie 判斷是否已登入，不用像 `/admin` API 那樣每次手動帶 `X-Admin-Key` Header。`/teacher/logout` 清掉 cookie。
+- **姓名標記（不是權限控管）**：登入時除了金鑰，還要填一個姓名，存進另一個 httpOnly cookie（`teacher_name`）。這個姓名**不驗證身份**、純粹讓審核打卡時知道「是誰做的」——`eco_checkins` 表新增了 `reviewed_by` 欄位，通過／拒絕打卡時會把目前登入的姓名存進去，之後在「打卡審核」列表跟個別學生頁都看得到是哪位老師審核的。cookie value 只能放 latin-1 字元（HTTP header 限制），中文姓名存之前用 `urllib.parse.quote` 編碼、讀出來時 `unquote` 解碼（`app/routers/teacher.py` 的 `_teacher_name()`），直接塞原始中文字串進 `set_cookie` 會讓伺服器噴 500。
 - **總覽**（`/teacher`）：學生總數、待審核打卡數、前測/中測/後測問卷已回收份數，以及各校學生數／已設定暱稱人數／平均能量。
 - **學生列表 ＋ 個別學生頁**（`/teacher/students`、`/teacher/students/{id}`）：列表可用學校篩選；個別學生頁彙整這位學生的能量／連續天數／稱號／徽章、完整答題紀錄、環保打卡紀錄（含照片連結）、以及每一輪成效評估問卷的完整回覆（選項代碼會轉回中文顯示文字）。
 - **題目分析**（`/teacher/questions`）：每題的作答人數、答對率，以及每個選項各自被選了幾次（可以看出常見的錯誤選項）。
@@ -147,11 +149,11 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 - **可以重複填寫**：`crud.upsert_carbon_footprint_response` 每位學生只留一筆最新結果，重填會覆蓋分數重新計算；但只有**第一次**送出才會發能量（`game_rules.CARBON_CALC_POINTS`，目前 20）、解鎖「🧮 碳足跡先鋒」徽章，重填不會重複發獎勵
 - 推播計算器連結：`POST /admin/push-carbon-footprint`（帶 `X-Admin-Key`）廣播給所有好友，教師後台「碳足跡」頁面（`/teacher/carbon-footprint`）也有對應按鈕，不用開終端機
 - 老師可以在教師後台「碳足跡」頁面看整體平均分數／各等級人數分布／全部學生的分數列表，或在個別學生頁看單一學生的逐題作答內容
-- **目前只在本機用假資料測過完整流程**（第一次送出正確發能量+解鎖徽章、第二次送出正確只更新分數不重複發獎勵），**還沒有在真實 LINE 裝置上實際測試過**，正式發送給學生前建議先自己用手機走一次流程
+- **已在真實 LINE 裝置上完整測試過**（第一次送出正確發能量+解鎖徽章、重新填寫正確只更新分數不重複發獎勵），已部署到 Render 正式環境
 
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 教師後台目前只有第一版：還沒有「同一學生前中後測變化」的逐人比較圖表，也還沒做真正的帳號系統（登入沿用共用的 `ADMIN_API_KEY`，見上方「教師後台」一節），之後若要多位老師各自登入、分權限管理，需要另外設計
+1. 教師後台目前只有第一版：還沒有「同一學生前中後測變化」的逐人比較圖表。帳號系統維持共用 `ADMIN_API_KEY` ＋ 登入時填姓名標記操作紀錄（見上方「教師後台」一節），這是刻意的設計決定（不需要分權限管理），如果之後真的需要老師各自獨立登入、分權限，需要另外設計
 2. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）

@@ -139,11 +139,12 @@ def count_approved_checkins(db: Session, student_id: int) -> int:
 
 
 def finalize_eco_checkin(
-    db: Session, checkin: models.EcoCheckin, *, status: str, points_awarded: int
+    db: Session, checkin: models.EcoCheckin, *, status: str, points_awarded: int, reviewed_by: str | None = None
 ) -> models.EcoCheckin:
     checkin.status = status
     checkin.points_awarded = points_awarded
     checkin.reviewed_at = models.utcnow()
+    checkin.reviewed_by = reviewed_by
     db.commit()
     db.refresh(checkin)
     return checkin

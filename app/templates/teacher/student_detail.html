@@ -47,7 +47,7 @@
   <h2>環保打卡紀錄（共 {{ checkins|length }} 筆）</h2>
   {% if checkins %}
   <table>
-    <thead><tr><th>時間</th><th>狀態</th><th>照片</th></tr></thead>
+    <thead><tr><th>時間</th><th>狀態</th><th>審核者</th><th>照片</th></tr></thead>
     <tbody>
     {% for c in checkins %}
       <tr>
@@ -57,6 +57,7 @@
           {% elif c.status == 'approved' %}<span class="pill approved">已通過</span>
           {% else %}<span class="pill rejected">未通過</span>{% endif %}
         </td>
+        <td>{{ c.reviewed_by or '—' }}</td>
         <td><a class="row-link" href="/teacher/checkins/{{ c.checkin_id }}/image" target="_blank">查看照片</a></td>
       </tr>
     {% endfor %}

@@ -2,9 +2,18 @@
 
 登入沿用既有的 ADMIN_API_KEY（跟 /admin 系列 API 共用同一把金鑰），登入後把金鑰存進
 httpOnly cookie，之後每個頁面用這個 cookie 判斷是否已登入，不用每個請求都手動帶 Header。
+
+**沒有做成真正的多帳號系統**：所有老師權限相同，共用同一把 ADMIN_API_KEY，登入時額外
+填一個姓名（存進 teacher_name cookie），單純用來標記「是誰做的」，不是身份驗證的一部分
+——姓名欄位刻意不驗證、可以隨便填，只是操作紀錄用的標籤，不是權限控管。
+
+cookie value 只能是 latin-1 可編碼的字元（HTTP header 的限制），中文姓名直接塞進去會讓
+`set_cookie` 噴 UnicodeEncodeError，所以存之前用 `urllib.parse.quote` 編碼、讀出來時
+`unquote` 解碼。
 """
 
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
@@ -20,12 +29,19 @@ from app.database import get_db
 router = APIRouter(prefix="/teacher", tags=["teacher"])
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+templates.env.filters["urldecode"] = lambda v: unquote(v) if v else v
 
 COOKIE_NAME = "teacher_key"
+TEACHER_NAME_COOKIE = "teacher_name"
 
 
 def _authed(request: Request) -> bool:
     return bool(settings.admin_api_key) and request.cookies.get(COOKIE_NAME) == settings.admin_api_key
+
+
+def _teacher_name(request: Request) -> str | None:
+    raw = request.cookies.get(TEACHER_NAME_COOKIE)
+    return unquote(raw) if raw else None
 
 
 def require_teacher(request: Request) -> RedirectResponse | None:
@@ -43,13 +59,20 @@ def login_page(request: Request):
 
 
 @router.post("/login")
-def login_submit(request: Request, admin_key: str = Form(...)):
+def login_submit(request: Request, admin_key: str = Form(...), teacher_name: str = Form(...)):
     if not settings.admin_api_key or admin_key != settings.admin_api_key:
         return templates.TemplateResponse(
             "teacher/login.html", {"request": request, "error": "金鑰錯誤，請再試一次"}, status_code=401
         )
     resp = RedirectResponse(url="/teacher", status_code=303)
     resp.set_cookie(COOKIE_NAME, admin_key, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30)
+    resp.set_cookie(
+        TEACHER_NAME_COOKIE,
+        quote(teacher_name.strip()[:50]),
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
+    )
     return resp
 
 
@@ -57,6 +80,7 @@ def login_submit(request: Request, admin_key: str = Form(...)):
 def logout():
     resp = RedirectResponse(url="/teacher/login", status_code=303)
     resp.delete_cookie(COOKIE_NAME)
+    resp.delete_cookie(TEACHER_NAME_COOKIE)
     return resp
 
 
@@ -219,7 +243,9 @@ def checkin_approve(request: Request, checkin_id: int, db: Session = Depends(get
     checkin = crud.get_eco_checkin_by_id(db, checkin_id)
     if not checkin or checkin.status != "pending":
         raise HTTPException(status_code=404, detail="Checkin not found or already reviewed")
-    student, new_badges = eco_checkin.approve_checkin(db, checkin, points=game_rules.ECO_CHECKIN_POINTS)
+    student, new_badges = eco_checkin.approve_checkin(
+        db, checkin, points=game_rules.ECO_CHECKIN_POINTS, reviewed_by=_teacher_name(request)
+    )
     eco_checkin.notify_checkin_approved(student, game_rules.ECO_CHECKIN_POINTS, new_badges)
     return RedirectResponse(url="/teacher/checkins", status_code=303)
 
@@ -232,6 +258,6 @@ def checkin_reject(request: Request, checkin_id: int, db: Session = Depends(get_
     if not checkin or checkin.status != "pending":
         raise HTTPException(status_code=404, detail="Checkin not found or already reviewed")
     student = crud.get_student_by_id(db, checkin.student_id)
-    eco_checkin.reject_checkin(db, checkin)
+    eco_checkin.reject_checkin(db, checkin, reviewed_by=_teacher_name(request))
     eco_checkin.notify_checkin_rejected(student)
     return RedirectResponse(url="/teacher/checkins", status_code=303)

@@ -29,8 +29,10 @@
       </div>
       {% elif row.checkin.status == "approved" %}
       <span class="pill approved">已通過（+{{ row.checkin.points_awarded }}）</span>
+      {% if row.checkin.reviewed_by %}<p style="margin:6px 0 0; font-size:0.75rem; color:#8a948a;">審核者：{{ row.checkin.reviewed_by }}</p>{% endif %}
       {% else %}
       <span class="pill rejected">未通過</span>
+      {% if row.checkin.reviewed_by %}<p style="margin:6px 0 0; font-size:0.75rem; color:#8a948a;">審核者：{{ row.checkin.reviewed_by }}</p>{% endif %}
       {% endif %}
     </div>
   {% endfor %}

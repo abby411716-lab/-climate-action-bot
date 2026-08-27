@@ -99,6 +99,7 @@ class EcoCheckin(Base):
     points_awarded: Mapped[int] = mapped_column(Integer, default=0)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     student: Mapped["Student"] = relationship(back_populates="eco_checkins")
 
