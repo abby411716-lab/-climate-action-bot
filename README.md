@@ -127,7 +127,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 4. 部署完成後會拿到一個固定網址，例如 `https://climate-action-bot.onrender.com`
 5. 到 LINE Developers Console → Messaging API 頁籤，把 Webhook URL 設成 `https://climate-action-bot.onrender.com/webhook`，按 Verify 確認成功，並開啟「Use webhook」
 
-**注意**：`render.yaml` 已改用 Render 提供的免費 PostgreSQL（`databases` 區塊，`DATABASE_URL` 會自動指到這個資料庫），資料庫本身跟 Web Service 分開，服務休眠喚醒不會清空資料。但 Render 免費 PostgreSQL 有 90 天期限，到期需要升級或重建。免費方案 Web Service 閒置一段時間會休眠，第一個請求可能要等數十秒喚醒，LINE 平台通常會重試 webhook，不影響功能但體驗上第一次互動可能稍慢。
+**注意**：資料庫使用 [Neon](https://neon.tech) 免費 PostgreSQL（地區 AWS US West 2 / Oregon，跟 Render 服務同區），免費方案不會過期。原本用的 Render 免費 PostgreSQL 建立 30 天後就過期、之後被刪除（2026/9 月底發生過，資料全數遺失），所以改用 Neon。`DATABASE_URL` 在 `render.yaml` 設為 `sync: false`，實際連線網址要在 Render 後台 climate-action-bot → Environment 手動設定（用 Neon 的直接連線網址，不要用主機名稱含 `-pooler` 的那個）。換到新的空資料庫時：先 `alembic upgrade head` 建表，再用 `python -m scripts.copy_questions_from_sqlite` 把本機題庫搬過去，學校用 `scripts/seed_school.py` 重建。免費方案 Web Service 閒置一段時間會休眠，第一個請求可能要等數十秒喚醒，LINE 平台通常會重試 webhook，不影響功能但體驗上第一次互動可能稍慢。
 
 （本專案一開始用本機 SQLite 起步是延續規格書第 7 節的建議，但實測發現 Render 免費方案的 Web Service 檔案系統在服務休眠喚醒時會重置，SQLite 檔案跟著消失，所以提早換成 PostgreSQL；本機開發若不想裝 PostgreSQL，`DATABASE_URL` 留空或設回 `sqlite:///./climate_action.db` 仍可用 SQLite。）
 
