@@ -21,6 +21,15 @@ logger = logging.getLogger("daily_push")
 
 ANSWER_POSTBACK_PREFIX = "answer|"
 
+# LINE Quick Reply 按鈕文字最多 20 字，選項常常更長會被截斷，所以完整選項寫在題目訊息裡，
+# 按鈕只放選項字母；學生點下去後聊天室會顯示「B. 完整選項」（display_text 上限 300 字）
+OPTION_LETTERS = "ABCDEFGHIJKLM"
+
+
+def option_label(options: list[str], option: str) -> str:
+    """回傳「B. 選項文字」這種帶字母的格式，給題目訊息和答題回饋共用。"""
+    return f"{OPTION_LETTERS[options.index(option)]}. {option}"
+
 
 def _build_quiz_messages(question: models.Question) -> list:
     messages = []
@@ -33,19 +42,21 @@ def _build_quiz_messages(question: models.Question) -> list:
         )
     messages.append(TextMessage(text=f"📘 今日氣候知識卡\n\n{question.knowledge_card_text}"))
 
+    options = question.options[:13]
     items = [
         QuickReplyItem(
             action=PostbackAction(
-                label=option[:20],
+                label=OPTION_LETTERS[idx],
                 data=f"{ANSWER_POSTBACK_PREFIX}{question.question_id}|{idx}",
-                display_text=option,
+                display_text=option_label(options, option)[:300],
             )
         )
-        for idx, option in enumerate(question.options[:13])
+        for idx, option in enumerate(options)
     ]
+    option_lines = "\n".join(option_label(options, option) for option in options)
     messages.append(
         TextMessage(
-            text=f"❓ 今日小測驗\n\n{question.question_text}",
+            text=f"❓ 今日小測驗\n\n{question.question_text}\n\n{option_lines}\n\n👇 請點選下方按鈕作答",
             quick_reply=QuickReply(items=items),
         )
     )

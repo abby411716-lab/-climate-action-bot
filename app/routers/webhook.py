@@ -20,7 +20,7 @@ from linebot.v3.webhooks import (
 from sqlalchemy.orm import Session
 
 from app import crud, eco_checkin, game_rules, models
-from app.daily_push import ANSWER_POSTBACK_PREFIX
+from app.daily_push import ANSWER_POSTBACK_PREFIX, option_label
 from app.database import get_db
 from app.game_rules import TAIPEI
 from app.line_client import get_messaging_api, get_messaging_blob_api, webhook_parser
@@ -211,7 +211,8 @@ def _handle_answer_postback(event: PostbackEvent, db: Session, data: str) -> Non
         lines.append(f"✅ 答對了！+{game_rules.CORRECT_POINTS} 能量")
     else:
         lines.append(
-            f"❌ 可惜，正確答案是「{question.correct_option}」 +{game_rules.INCORRECT_POINTS} 能量（感謝你的參與）"
+            f"❌ 可惜，正確答案是「{option_label(question.options, question.correct_option)}」"
+            f" +{game_rules.INCORRECT_POINTS} 能量（感謝你的參與）"
         )
     lines.append(f"目前能量：{new_points}｜連續天數：{new_streak}（最長 {new_longest}）")
     lines.append(f"目前身分：{rank_name}\n{rank_flavor}")
