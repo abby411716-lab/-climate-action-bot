@@ -14,7 +14,11 @@ def get_school_by_id(db: Session, school_id: int) -> models.School | None:
 
 
 def list_schools(db: Session) -> list[models.School]:
-    return db.query(models.School).order_by(models.School.school_id).all()
+    return (
+        db.query(models.School)
+        .order_by(models.School.sort_order.is_(None), models.School.sort_order, models.School.school_id)
+        .all()
+    )
 
 
 def get_student_by_line_id(db: Session, line_user_id: str) -> models.Student | None:

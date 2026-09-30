@@ -16,6 +16,8 @@ class School(Base):
     school_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     school_name: Mapped[str] = mapped_column(String(200), nullable=False)
     join_link_code: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    # 選學校按鈕／後台列表的顯示順序，數字小的排前面；沒設定的排在最後（依 school_id）
+    sort_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     students: Mapped[list["Student"]] = relationship(back_populates="school")
