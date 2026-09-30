@@ -7,7 +7,7 @@
     {% for row in rows %}
       <div style="padding: 14px 0; border-bottom: 1px solid #eef1ee;">
         <p style="font-weight:600; margin:0 0 4px;">
-          {{ row.question.question_id }}. {{ row.question.question_text }}
+          {{ loop.index }}. {{ row.question.question_text }}
           {% if row.question.scheduled_date %}<span style="font-weight:400; color:#8a948a; font-size:0.8rem;">（{{ row.question.scheduled_date }}）</span>{% endif %}
         </p>
         <p style="margin: 0 0 8px; font-size:0.85rem; color:#4a5a4a;">
