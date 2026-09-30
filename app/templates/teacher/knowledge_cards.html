@@ -1,0 +1,31 @@
+{% extends "teacher/base.html" %}
+{% block title %}氣候知識卡{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>氣候知識卡（共 {{ questions|length }} 張）</h2>
+  <p style="margin:0 0 8px; font-size:0.85rem; color:#4a5a4a;">每天 08:00 先推送知識卡，接著推送對應的小測驗；測驗作答統計請見「題目分析」。</p>
+  {% if questions %}
+    {% for q in questions %}
+      <div style="padding: 14px 0; border-bottom: 1px solid #eef1ee;">
+        <p style="font-weight:600; margin:0 0 6px;">
+          EP.{{ loop.index }}
+          {% if q.scheduled_date %}<span style="font-weight:400; color:#8a948a; font-size:0.8rem;">（{{ q.scheduled_date }}）</span>{% endif %}
+          {% if q.question_id in pushed_ids %}
+            <span style="font-weight:400; font-size:0.75rem; color:#2e7d32; background:#e8f5e9; padding:2px 8px; border-radius:10px;">已推送</span>
+          {% else %}
+            <span style="font-weight:400; font-size:0.75rem; color:#8a948a; background:#f1f3f1; padding:2px 8px; border-radius:10px;">尚未推送</span>
+          {% endif %}
+          {% if q.topic_tag %}<span style="font-weight:400; font-size:0.75rem; color:#8a948a;">#{{ q.topic_tag }}</span>{% endif %}
+        </p>
+        {% if q.knowledge_card_image_url %}
+          <img src="{{ q.knowledge_card_image_url }}" alt="知識卡圖片" style="max-width:320px; width:100%; border-radius:8px; margin:0 0 8px;">
+        {% endif %}
+        <p style="margin:0 0 8px; line-height:1.7;">📘 {{ q.knowledge_card_text }}</p>
+        <p style="margin:0; font-size:0.85rem; color:#4a5a4a;">❓ 對應測驗：{{ q.question_text }}</p>
+      </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty">尚未建立任何知識卡</div>
+  {% endif %}
+</div>
+{% endblock %}

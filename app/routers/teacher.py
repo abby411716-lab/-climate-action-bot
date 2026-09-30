@@ -166,6 +166,21 @@ def student_detail(request: Request, student_id: int, db: Session = Depends(get_
     )
 
 
+@router.get("/knowledge-cards")
+def knowledge_cards(request: Request, db: Session = Depends(get_db)):
+    if resp := require_teacher(request):
+        return resp
+    return templates.TemplateResponse(
+        "teacher/knowledge_cards.html",
+        {
+            "request": request,
+            "active": "knowledge",
+            "questions": crud.list_questions(db),
+            "pushed_ids": crud.list_pushed_question_ids(db),
+        },
+    )
+
+
 @router.get("/questions")
 def questions_analysis(request: Request, db: Session = Depends(get_db)):
     if resp := require_teacher(request):

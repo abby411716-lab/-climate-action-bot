@@ -188,6 +188,10 @@ def get_next_unpushed_question(db: Session, today: date) -> models.Question | No
     )
 
 
+def list_pushed_question_ids(db: Session) -> set[int]:
+    return {question_id for (question_id,) in db.query(models.DailyPush.question_id).all()}
+
+
 def get_latest_daily_push(db: Session) -> models.DailyPush | None:
     return db.query(models.DailyPush).order_by(models.DailyPush.pushed_at.desc()).first()
 
