@@ -85,6 +85,17 @@ class DailyPush(Base):
     pushed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class AssessmentPush(Base):
+    """成效評估問卷（前測／中測／後測）的推播紀錄，手動按鈕或自動排程送出都會記一筆，
+    自動排程靠這個判斷「這一輪已經推過」，避免 APScheduler 跟 GitHub Actions 重複推送。"""
+
+    __tablename__ = "assessment_pushes"
+
+    push_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    assessment_round: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    pushed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class EcoCheckin(Base):
     """學生拍照打卡的環保行動，需經老師審核通過才會實際發放能量／徽章。"""
 

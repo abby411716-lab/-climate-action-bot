@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import assessment_questions, crud, eco_checkin, game_rules
-from app.assessment import broadcast_assessment_invite
+from app.assessment import broadcast_assessment_invite, push_scheduled_assessment
 from app.carbon_footprint import broadcast_carbon_footprint_invite
 from app.config import settings
 from app.daily_push import push_daily_question
@@ -63,7 +63,12 @@ def update_school(school_id: int, payload: SchoolUpdate, db: Session = Depends(g
 
 @router.post("/push-daily", dependencies=[Depends(require_admin_key)])
 def trigger_daily_push(force: bool = False):
-    """手動觸發一次每日推送，測試用（正式排程見 app/scheduler.py，每天 08:00 Asia/Taipei 自動執行）。"""
+    """觸發一次每日推送（GitHub Actions 每天 08:00 Asia/Taipei 也會呼叫這裡當排程備援）。
+
+    今天如果是排定的問卷日（app/assessment.ASSESSMENT_SCHEDULE）也會一併推送問卷；
+    force 只影響每日測驗，不會讓已推過的問卷重推。
+    """
+    push_scheduled_assessment()
     push_daily_question(force=force)
     return {"status": "triggered", "force": force}
 

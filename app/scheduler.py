@@ -2,6 +2,7 @@ import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from app.assessment import push_scheduled_assessment
 from app.daily_push import push_daily_question
 from app.game_rules import TAIPEI
 
@@ -11,7 +12,7 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def start_scheduler() -> BackgroundScheduler:
-    """啟動背景排程：每天 Asia/Taipei 08:00 推送當日題目。
+    """啟動背景排程：每天 Asia/Taipei 08:00 推送當日題目，以及排定日期的成效評估問卷。
 
     注意：Render 免費方案的 Web Service 閒置一段時間會休眠，休眠期間排程不會執行；
     若要保證準時推送，之後可以改用 Render 的付費 Cron Job 或外部服務定時呼叫
@@ -22,7 +23,8 @@ def start_scheduler() -> BackgroundScheduler:
         return _scheduler
 
     _scheduler = BackgroundScheduler(timezone=TAIPEI)
+    _scheduler.add_job(push_scheduled_assessment, "cron", hour=8, minute=0, id="assessment_push")
     _scheduler.add_job(push_daily_question, "cron", hour=8, minute=0, id="daily_push")
     _scheduler.start()
-    logger.info("排程已啟動：每天 08:00（Asia/Taipei）推送當日題目")
+    logger.info("排程已啟動：每天 08:00（Asia/Taipei）推送當日題目／排定的問卷")
     return _scheduler

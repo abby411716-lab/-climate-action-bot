@@ -196,6 +196,21 @@ def record_daily_push(db: Session, question_id: int) -> models.DailyPush:
     return push
 
 
+def has_assessment_push(db: Session, assessment_round: str) -> bool:
+    return (
+        db.query(models.AssessmentPush).filter(models.AssessmentPush.assessment_round == assessment_round).first()
+        is not None
+    )
+
+
+def record_assessment_push(db: Session, assessment_round: str) -> models.AssessmentPush:
+    push = models.AssessmentPush(assessment_round=assessment_round)
+    db.add(push)
+    db.commit()
+    db.refresh(push)
+    return push
+
+
 def get_answer_log(db: Session, student_id: int, question_id: int) -> models.AnswerLog | None:
     return (
         db.query(models.AnswerLog)

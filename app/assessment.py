@@ -1,17 +1,32 @@
-"""成效評估問卷的 LINE 推播：手動由老師/管理員觸發，把 LIFF 表單連結廣播給所有好友。
+"""成效評估問卷的 LINE 推播：把 LIFF 表單連結廣播給所有好友。
 
-不像每日測驗有精確的 scheduled_date，前測/中測/後測只知道「哪一週」要發，
-所以做成跟 /admin/push-daily 一樣的手動觸發端點（見 app/routers/admin.py），
-由管理員自己挑那一週裡的哪一天發送，而不是自動排程。
+有兩種觸發方式：
+- 自動：ASSESSMENT_SCHEDULE 列出的日期，會跟每日測驗一起在 Asia/Taipei 08:00 自動推送
+  （app/scheduler.py 內建排程＋GitHub Actions 呼叫 /admin/push-daily 雙保險）
+- 手動：/admin/push-assessment 或教師後台「成效總覽」頁的按鈕，還沒排定日期的輪次用這個發
+兩種方式送出都會寫一筆 assessment_pushes 紀錄；自動推送前會先檢查這一輪是否已經推過，
+所以就算老師已經先手動按過、或兩個排程都觸發到，也不會重複推送。
 """
+
+import logging
+from datetime import date, datetime
 
 from linebot.v3.messaging import BroadcastRequest, TextMessage
 
-from app import assessment_questions
+from app import assessment_questions, crud
 from app.config import settings
+from app.database import SessionLocal
+from app.game_rules import TAIPEI
 from app.line_client import get_messaging_api
 
+logger = logging.getLogger("assessment")
+
 LIFF_BASE_URL = "https://liff.line.me"
+
+# 自動推送問卷的日期（Asia/Taipei）→ 輪次；中測／後測日期確定後加在這裡即可
+ASSESSMENT_SCHEDULE: dict[date, str] = {
+    date(2026, 10, 1): "baseline",
+}
 
 
 def build_assessment_url(assessment_round: str) -> str:
@@ -32,3 +47,28 @@ def broadcast_assessment_invite(assessment_round: str) -> None:
 
     api = get_messaging_api()
     api.broadcast(BroadcastRequest(messages=[TextMessage(text=text)]))
+
+    db = SessionLocal()
+    try:
+        crud.record_assessment_push(db, assessment_round)
+    finally:
+        db.close()
+
+
+def push_scheduled_assessment() -> None:
+    """今天（Asia/Taipei）若是 ASSESSMENT_SCHEDULE 排定的日期、且該輪還沒推過，就推送問卷。"""
+    today = datetime.now(TAIPEI).date()
+    assessment_round = ASSESSMENT_SCHEDULE.get(today)
+    if assessment_round is None:
+        return
+
+    db = SessionLocal()
+    try:
+        if crud.has_assessment_push(db, assessment_round):
+            logger.info("%s 問卷已經推送過，略過。", assessment_round)
+            return
+    finally:
+        db.close()
+
+    broadcast_assessment_invite(assessment_round)
+    logger.info("已自動推送 %s 問卷", assessment_round)

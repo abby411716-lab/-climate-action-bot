@@ -159,7 +159,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`（2026/9/30 改版，由 Alembic data migration `c3d9a1e5f7b2` 套用，Render 部署時會自動執行）：**10/1（四）為前測日**，只推播成效評估問卷（`POST /admin/push-assessment?round=baseline`，或教師後台「成效總覽」頁的按鈕手動觸發），當天不推每日測驗；**10/2（五）～10/31（六）每天推 1 題、週末也推**（共 30 天）→ question_id 2~31。中測（`round=midterm`）與後測（`round=posttest`）的發送日期待定，一樣手動觸發。10/31 之後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
+1. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`（2026/9/30 改版，由 Alembic data migration `c3d9a1e5f7b2` 套用，Render 部署時會自動執行）：**10/1（四）為前測日**，Asia/Taipei 08:00 自動推播前測問卷（`app/assessment.py` 的 `ASSESSMENT_SCHEDULE`，跟每日測驗共用 APScheduler＋GitHub Actions 雙保險；推過會記在 `assessment_pushes` 表，不會重複推送，老師若已先手動按過也會跳過），當天不推每日測驗；**10/2（五）～10/31（六）每天推 1 題、週末也推**（共 30 天）→ question_id 2~31。中測（`round=midterm`）與後測（`round=posttest`）的發送日期待定，確定後加進 `ASSESSMENT_SCHEDULE` 就會自動推送，或用 `POST /admin/push-assessment` ／教師後台「成效總覽」頁的按鈕手動觸發。10/31 之後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）
 
