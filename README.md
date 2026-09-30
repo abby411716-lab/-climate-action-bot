@@ -2,7 +2,24 @@
 
 依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援、前測/中測/後測成效評估問卷（LIFF 表單）、碳足跡打卡計算器（LIFF 表單，算出「綠色分數」），以及教師後台網頁（總覽／學生列表與個別學生頁／題目分析／成效總覽／碳足跡／打卡審核）。
 
-## 目前進度快照（2026-08-27）
+## 目前進度快照（2026-10-01）
+
+**9/30～10/1 變更摘要**
+- 🔥 **資料庫搬家**：Render 免費 PostgreSQL 建立 30 天後過期並被刪除（舊資料全數遺失），改用 **Neon 免費 PostgreSQL**（不會過期，地區 US West 2 / Oregon）。連線網址在 Render 後台 Environment 的 `DATABASE_URL` 手動設定；本機另存一份在 `neon_url.txt`（已 gitignore，不會上傳）
+- ✅ Neon 已建表並匯入 30 題題庫（`scripts/copy_questions_from_sqlite.py`）＋ 4 個學校，顯示順序：中興高中（`chunghsing_high`）→ 南投高中（`nantou_high`）→ 其他高中職（`other_high`）→ 大學生（`university`），順序存在 `schools.sort_order`
+- ✅ 新排程：10/1 前測 → 10/2～10/31 每天 1 題（含週末）→ 10/16 中測 → 11/1 後測，問卷改成自動推送（`app/assessment.py` 的 `ASSESSMENT_SCHEDULE`），推過會記在 `assessment_pushes`，不會重複推
+- ✅ 前測推送時附上「選學校」按鈕＋暱稱引導，讓換資料庫前就加好友的約 30 位舊好友重新註冊；問卷／碳足跡表單遇到還沒建檔的好友會自動建檔，不再拒絕
+- ✅ 每日小測驗改成 A／B／C／D 按鈕（LINE 按鈕上限 20 字，16 個選項原本會被截斷），完整選項列在題目訊息裡
+- ✅ 教師後台：題目分析題號改為 1～30；新增「氣候知識卡」分頁（EP.1～EP.30、推送狀態、對應測驗）
+- ✅ 準時推送：新增 **cron-job.org** 每天 08:00（Asia/Taipei）POST `/admin/push-daily`（帶 `X-Admin-Key`）。原因：GitHub Actions 排程實測延遲 3.5～4 小時（約 11:30 才執行），Render 免費方案 8:00 通常在休眠，內建 APScheduler 不會觸發。GitHub Actions 保留當第二層備援
+- 📄 給學員的說明信已存成桌面的 `負碳褶學_LINE比歐小助教使用說明.docx`
+
+**⏭️ 下次先做這些事**
+1. 確認 10/1 08:00 前測有沒有準時推送：看 cron-job.org 的 History（應為 200），或查 Neon 的 `assessment_pushes` 表的 `pushed_at`
+2. **確認 LINE 官方帳號的每月訊息則數**：推播按「人數」計，30 人 × 10 月約 32 次推播 ≈ 960 則，免費方案（約 200 則／月）可能 10/6 左右就用完，需要升級方案
+3. 10/31 題庫用完後，如要延伸每日測驗內容，需追加題目並設定 `scheduled_date`
+
+## 先前進度快照（2026-08-27）
 
 - ✅ 30 題正式題庫已排定實際發送日期（見下方「每日推送」），本機／Render 兩邊資料庫同步
 - ✅ 每日推送排程雙保險：服務內建 APScheduler ＋ GitHub Actions 外部 cron，已各自手動觸發驗證成功
