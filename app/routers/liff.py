@@ -70,9 +70,8 @@ def submit_assessment(payload: AssessmentSubmitRequest, db: Session = Depends(ge
     except LiffAuthError:
         raise HTTPException(status_code=401, detail="身份驗證失敗，請透過 LINE 重新開啟這個連結")
 
-    student = crud.get_student_by_line_id(db, line_user_id)
-    if student is None:
-        raise HTTPException(status_code=400, detail="請先加 LINE 好友並完成學校設定，再填寫問卷")
+    # 還沒建檔的好友（例如換資料庫後還沒點選學校的舊好友）也讓他能交問卷，學校之後再補選
+    student = crud.get_or_create_student(db, line_user_id)
 
     try:
         cleaned = assessment_questions.validate_answers(payload.assessment_round, payload.answers)
@@ -105,9 +104,7 @@ def submit_carbon_footprint(payload: CarbonFootprintSubmitRequest, db: Session =
     except LiffAuthError:
         raise HTTPException(status_code=401, detail="身份驗證失敗，請透過 LINE 重新開啟這個連結")
 
-    student = crud.get_student_by_line_id(db, line_user_id)
-    if student is None:
-        raise HTTPException(status_code=400, detail="請先加 LINE 好友並完成學校設定，再使用碳足跡計算器")
+    student = crud.get_or_create_student(db, line_user_id)
 
     try:
         cleaned, total_score = carbon_footprint.score_answers(payload.answers)

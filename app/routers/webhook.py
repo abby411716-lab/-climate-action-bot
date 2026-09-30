@@ -32,7 +32,7 @@ SCHOOL_POSTBACK_PREFIX = "school_id="
 MENU_POSTBACK_PREFIX = "menu|"
 
 
-def _school_selection_message(db: Session) -> TextMessage:
+def _school_selection_message(db: Session, text: str = "請問你是哪間學校的同學？請點選下方按鈕確認 🌱") -> TextMessage:
     schools = crud.list_schools(db)
     items = [
         QuickReplyItem(
@@ -45,7 +45,7 @@ def _school_selection_message(db: Session) -> TextMessage:
         for school in schools[:13]
     ]
     return TextMessage(
-        text="請問你是哪間學校的同學？請點選下方按鈕確認 🌱",
+        text=text,
         quick_reply=QuickReply(items=items) if items else None,
     )
 
@@ -114,12 +114,10 @@ def _handle_school_postback(event: PostbackEvent, db: Session, data: str) -> Non
         reply = TextMessage(text="找不到這間學校，請聯絡老師確認連結是否正確。")
     else:
         crud.set_student_school(db, student, school.school_id)
-        reply = TextMessage(
-            text=(
-                f"已為你登記為「{school.school_name}」的同學 🎉 之後每天都會收到氣候知識卡與小測驗！\n\n"
-                "最後一步，幫自己取一個暱稱吧（會顯示在排行榜上），直接打字輸入就可以了 😊"
-            )
-        )
+        text = f"已為你登記為「{school.school_name}」的同學 🎉 之後每天都會收到氣候知識卡與小測驗！"
+        if student.nickname is None:
+            text += "\n\n最後一步，幫自己取一個暱稱吧（會顯示在排行榜上），直接打字輸入就可以了 😊"
+        reply = TextMessage(text=text)
     api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[reply]))
 
 
