@@ -56,7 +56,13 @@ def broadcast_assessment_invite(assessment_round: str) -> None:
         if assessment_round == "baseline":
             messages.append(
                 _school_selection_message(
-                    db, text="📌 還沒選過學校的同學，請點選下方按鈕選擇你的學校，完成註冊 🌱（已經選過的不用再點）"
+                    db,
+                    text=(
+                        "📌 請完成註冊（只要 2 步驟）\n\n"
+                        "1️⃣ 點選下方按鈕，選擇你的學校\n"
+                        "2️⃣ 輸入你的暱稱（會顯示在排行榜上）\n\n"
+                        "完成後就能開始每天答題、累積能量囉 🌱（已經註冊過的同學不用再點）"
+                    ),
                 )
             )
 
