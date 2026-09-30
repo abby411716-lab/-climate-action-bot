@@ -171,7 +171,7 @@ def get_next_unpushed_question(db: Session, today: date) -> models.Question | No
 
     沒有設定 scheduled_date 的題目不會被自動排程選到（例如 scripts/seed_question.py 建的測試題）。
     用 <= 而不是 == 是為了在服務曾經漏推（例如 Render 休眠跳過某一天）時能自動補推，
-    同時排定日期落在週末／空檔週的日子會自然選不到題目而跳過，不需要另外判斷平假日。
+    同時沒有排定題目的日子（例如 10/1 前測日）會自然選不到題目而跳過，不需要另外判斷平假日。
     """
     pushed_ids = db.query(models.DailyPush.question_id)
     return (

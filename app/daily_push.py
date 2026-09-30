@@ -65,7 +65,7 @@ def push_daily_question(force: bool = False) -> None:
 
         question = crud.get_next_unpushed_question(db, today)
         if question is None:
-            logger.info("今天沒有排定要推送的題目（可能是週末／空檔週，或題庫已全部推送完畢）。")
+            logger.info("今天沒有排定要推送的題目（可能是前測日等非排程日，或題庫已全部推送完畢）。")
             return
 
         api = get_messaging_api()

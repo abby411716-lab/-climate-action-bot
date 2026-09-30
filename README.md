@@ -11,7 +11,7 @@
 - ✅ 碳足跡打卡計算器（LIFF 表單）：交通／居家能源／垃圾回收共 6 題，算出 0~100 的「綠色分數」，首次完成發能量＋解鎖徽章。改成**獨立的 LIFF App／Endpoint URL**（`CARBON_LIFF_ID`，見「碳足跡打卡計算器」一節），不再跟成效問卷共用；Rich Menu「環保打卡」按鈕也改成 URIAction 直接開啟這個 LIFF。**已部署到 Render 正式環境（Endpoint URL、`CARBON_LIFF_ID` 環境變數都已設定好），並在真實 LINE 裝置上對正式環境完整測試過，確認算分、發能量、解鎖徽章都正常**
 - ✅ 教師後台審核操作紀錄：登入時填姓名（存進 `teacher_name` cookie），打卡通過／拒絕時記錄是哪位老師審核的（`eco_checkins.reviewed_by`），不是真正的帳號分權限，只是知道「誰做的」；本機已測試過中文姓名登入＋審核紀錄正確寫入
 - ✅ 個別學生頁「前中後測變化」折線圖：三輪都問的量表題整理成小型 SVG 折線圖，缺考輪次不誤導成有數值；本機用假資料測過完整/部分填寫兩種情況，用瀏覽器截圖確認排版正常，已部署到 Render
-- ⏭️ **下次先做這件事**：目前沒有立即待辦，只剩 Round2（10/30）題庫用完後要延伸每日測驗內容的長期提醒（見下方「尚未完成」）
+- ⏭️ **下次先做這件事**：目前沒有立即待辦，只剩 10/31 題庫用完後要延伸每日測驗內容的長期提醒（見下方「尚未完成」）
 
 ## 環境設定
 
@@ -64,7 +64,7 @@ uvicorn app.main:app --reload
   - 文字訊息：若尚未歸校則詢問學校，已歸校則回覆目前身分／能量／連續天數／徽章
 - 每日推送＋答題＋積分/streak/徽章（規格書第 10 節第 2 步）：
   - `app/scheduler.py`：程式啟動時用 APScheduler 在背景排程，每天 Asia/Taipei 08:00 自動推送當日題目（`push_daily_question`）
-  - `app/daily_push.py`：取出「`scheduled_date` 已到（`<=` 今天）、但還沒推送過」的下一題（`app/crud.get_next_unpushed_question`），用 LINE Broadcast API 一次推給所有好友（知識卡 + 測驗，測驗選項做成 Quick Reply 按鈕）；同一天已推送過就不會再推。沒有設定 `scheduled_date` 的題目不會被自動排程選到。用 `<=` 而不是 `==` 是為了在服務曾經漏推（例如 Render 休眠跳過某一天）時能自動補推；排定日期落在週末、或兩個 Round 之間的空檔週，當天就不會有題目符合條件，會自動跳過不推送
+  - `app/daily_push.py`：取出「`scheduled_date` 已到（`<=` 今天）、但還沒推送過」的下一題（`app/crud.get_next_unpushed_question`），用 LINE Broadcast API 一次推給所有好友（知識卡 + 測驗，測驗選項做成 Quick Reply 按鈕）；同一天已推送過就不會再推。沒有設定 `scheduled_date` 的題目不會被自動排程選到。用 `<=` 而不是 `==` 是為了在服務曾經漏推（例如 Render 休眠跳過某一天）時能自動補推；排定日期以外的日子（例如 10/1 前測日）當天不會有題目符合條件，會自動跳過不推送
   - 學生點選答案後（`app/routers/webhook.py` 的 `_handle_answer_postback`）：寫入 `answer_logs`（同一題只能答一次），更新 `students.total_points / current_streak / longest_streak / badges`
   - `app/game_rules.py`：積分／連續天數／徽章／稱號的規則都集中在這裡（規格書沒有寫死細節，這是我先訂的一版合理規則，可依需求調整數值）：
     - 答對 +10、答錯 +2（給少量參與分數鼓勵持續作答）
@@ -159,7 +159,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 ## 尚未完成（規格書第 10 節後續步驟）
 
-1. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`：9/14（一）那週是前測週（推播成效評估問卷，見上方「成效評估問卷」章節，`POST /admin/push-assessment?round=baseline` 手動觸發），不推送每日測驗題目；Round1 為 9/21（一）起連續 3 週的週一到週五（共 15 天，9/21~10/9，中間沒有空檔週）→ question_id 2~16；Round2 為 10/12（一）起同樣連續 3 週的週一到週五（共 15 天，10/12~10/30）→ question_id 17~31，10/12 當天同步發送中測問卷（`round=midterm`）；11/3 那週為後測（`round=posttest`）。Round2 結束後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
+1. 目前 30 題正式題庫已依實際行程排定 `scheduled_date`（2026/9/30 改版，由 Alembic data migration `c3d9a1e5f7b2` 套用，Render 部署時會自動執行）：**10/1（四）為前測日**，只推播成效評估問卷（`POST /admin/push-assessment?round=baseline`，或教師後台「成效總覽」頁的按鈕手動觸發），當天不推每日測驗；**10/2（五）～10/31（六）每天推 1 題、週末也推**（共 30 天）→ question_id 2~31。中測（`round=midterm`）與後測（`round=posttest`）的發送日期待定，一樣手動觸發。10/31 之後每日測驗題庫即用完，`push_daily_question` 會記 log（info 等級）、不會再推送，之後如果要延伸內容需要追加新題目並設定 `scheduled_date`（用 `scripts/seed_questions_from_csv.py` 匯入即可）
 
 ## 資料庫 schema 變更（Alembic）
 
