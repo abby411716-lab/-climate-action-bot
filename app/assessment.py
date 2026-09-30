@@ -23,9 +23,11 @@ logger = logging.getLogger("assessment")
 
 LIFF_BASE_URL = "https://liff.line.me"
 
-# 自動推送問卷的日期（Asia/Taipei）→ 輪次；中測／後測日期確定後加在這裡即可
+# 自動推送問卷的日期（Asia/Taipei）→ 輪次；要改日期或加輪次改這裡即可
 ASSESSMENT_SCHEDULE: dict[date, str] = {
     date(2026, 10, 1): "baseline",
+    date(2026, 10, 16): "midterm",
+    date(2026, 11, 1): "posttest",
 }
 
 
