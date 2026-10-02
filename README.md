@@ -123,6 +123,7 @@ uvicorn app.main:app --reload
 
 - **登入方式**：沿用既有的 `ADMIN_API_KEY`（跟 `/admin` 系列 JSON API 共用同一把金鑰），不是另外的帳號系統，所有老師權限相同。`/teacher/login` 頁面輸入金鑰後，正確的話會存進一個 httpOnly cookie（`teacher_key`，效期 30 天），之後每個 `/teacher/*` 頁面都是看這個 cookie 判斷是否已登入，不用像 `/admin` API 那樣每次手動帶 `X-Admin-Key` Header。`/teacher/logout` 清掉 cookie。
 - **姓名標記（不是權限控管）**：登入時除了金鑰，還要填一個姓名，存進另一個 httpOnly cookie（`teacher_name`）。這個姓名**不驗證身份**、純粹讓審核打卡時知道「是誰做的」——`eco_checkins` 表新增了 `reviewed_by` 欄位，通過／拒絕打卡時會把目前登入的姓名存進去，之後在「打卡審核」列表跟個別學生頁都看得到是哪位老師審核的。cookie value 只能放 latin-1 字元（HTTP header 限制），中文姓名存之前用 `urllib.parse.quote` 編碼、讀出來時 `unquote` 解碼（`app/routers/teacher.py` 的 `_teacher_name()`），直接塞原始中文字串進 `set_cookie` 會讓伺服器噴 500。
+- **提醒**（`/teacher/reminders`，程式在 `app/reminders.py`）：列出資料庫裡還沒完成的學生（還沒註冊、還沒填前測、還沒答最新推送的那一題）和本月 LINE 訊息額度，按按鈕後用 Push Message 只發給這些人，每人依缺的項目收到不同內容（選學校按鈕／暱稱引導、問卷連結、重新附上題目＋A～D 作答按鈕），一人只算 1 則額度。換資料庫後從沒跟機器人互動過的好友不在 `students` 表裡，這裡找不到，要另外從 LINE 官方帳號後台群發。
 - **總覽**（`/teacher`）：學生總數、待審核打卡數、前測/中測/後測問卷已回收份數，以及各校學生數／已設定暱稱人數／平均能量。
 - **學生列表 ＋ 個別學生頁**（`/teacher/students`、`/teacher/students/{id}`）：列表可用學校篩選；個別學生頁彙整這位學生的能量／連續天數／稱號／徽章、完整答題紀錄、環保打卡紀錄（含照片連結）、以及每一輪成效評估問卷的完整回覆（選項代碼會轉回中文顯示文字）。
   - **前中後測變化折線圖**（`teacher_dashboard.student_assessment_trend`）：成效評估問卷裡三輪都問的量表題（1~5 分，`assessment_questions.CORE_SCALE_KEYS`，例如「對氣候變遷的了解程度」）才有數值可以比較，整理成小型折線圖顯示在個別學生頁最上方，一題一張小圖（inline SVG，伺服器端算好座標，不需要額外的前端圖表套件）。單選/多選題沒有數值大小可言，維持原本文字列表呈現。缺考的輪次畫成空心點＋「未填」，不連線到相鄰的點，避免暗示一個不存在的數值。

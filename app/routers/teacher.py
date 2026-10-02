@@ -20,7 +20,7 @@ from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app import assessment_questions, carbon_footprint, crud, eco_checkin, game_rules, teacher_dashboard
+from app import assessment_questions, carbon_footprint, crud, eco_checkin, game_rules, reminders, teacher_dashboard
 from app.assessment import broadcast_assessment_invite
 from app.carbon_footprint import broadcast_carbon_footprint_invite
 from app.config import settings
@@ -230,6 +230,37 @@ def carbon_footprint_push(request: Request):
         return resp
     broadcast_carbon_footprint_invite()
     return RedirectResponse(url="/teacher/carbon-footprint?sent=1", status_code=303)
+
+
+@router.get("/reminders")
+def reminders_page(
+    request: Request, sent: int | None = None, failed: int | None = None, db: Session = Depends(get_db)
+):
+    if resp := require_teacher(request):
+        return resp
+    question = reminders.latest_pushed_question(db)
+    plans = reminders.build_reminder_plans(db, question)
+    return templates.TemplateResponse(
+        "teacher/reminders.html",
+        {
+            "request": request,
+            "active": "reminders",
+            "plans": plans,
+            "question": question,
+            "assessment_label": assessment_questions.ROUND_LABELS[reminders.REMINDER_ASSESSMENT_ROUND],
+            "quota": reminders.message_quota(),
+            "sent": sent,
+            "failed": failed,
+        },
+    )
+
+
+@router.post("/reminders/push")
+def reminders_push(request: Request, db: Session = Depends(get_db)):
+    if resp := require_teacher(request):
+        return resp
+    sent, failed = reminders.send_reminders(db)
+    return RedirectResponse(url=f"/teacher/reminders?sent={sent}&failed={failed}", status_code=303)
 
 
 @router.get("/checkins")

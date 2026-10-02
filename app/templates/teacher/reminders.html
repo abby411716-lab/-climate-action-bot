@@ -1,0 +1,49 @@
+{% extends "teacher/base.html" %}
+{% block title %}提醒{% endblock %}
+{% block content %}
+{% if sent is not none %}
+<div class="card" style="background:#eef7ee;">
+  <p style="margin:0; color:#1f5c2b; font-weight:600;">✅ 已發送提醒給 {{ sent }} 位學生{% if failed %}，{{ failed }} 位發送失敗（可能封鎖了官方帳號，或本月額度已用完）{% endif %}</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>提醒還沒完成的學生</h2>
+  <p class="meta" style="margin:0 0 10px;">
+    只發給下表的學生，每人依缺的項目收到不同內容：還沒註冊的附選學校按鈕或暱稱引導、還沒填{{ assessment_label }}的附問卷連結、還沒答最新一題{% if question %}（{{ question.scheduled_date.month }}/{{ question.scheduled_date.day }}）{% endif %}的重新附上題目和 A／B／C／D 按鈕。
+    一個人不管缺幾項都只算 1 則訊息額度。換資料庫後從沒跟機器人互動過的好友不在資料庫裡，這裡找不到，要另外從 LINE 官方帳號後台群發。
+  </p>
+  <p class="meta" style="margin:0 0 14px;">
+    本次會發送：<strong>{{ plans | length }} 人</strong>（用掉 {{ plans | length }} 則額度）
+    {% if quota %}｜本月 LINE 額度：已用 {{ quota.used }}{% if quota.limit is not none %}／上限 {{ quota.limit }}（剩 {{ quota.limit - quota.used }}）{% else %}（無上限）{% endif %}{% else %}｜本月 LINE 額度：查詢失敗{% endif %}
+  </p>
+  {% if quota and quota.limit is not none and quota.limit - quota.used < plans | length %}
+  <p style="margin:0 0 14px; color:#a3231f; font-weight:600;">⚠️ 剩餘額度不夠發給所有人，超過額度的部分會發送失敗。</p>
+  {% endif %}
+  {% if plans %}
+  <form method="post" action="/teacher/reminders/push"
+        onsubmit="return confirm('確定要發送提醒給 {{ plans | length }} 位學生嗎？這個動作會立即發送，無法收回。');">
+    <button type="submit" class="btn btn-approve" style="padding: 9px 18px;">發送提醒（{{ plans | length }} 人）</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>名單</h2>
+  {% if plans %}
+  <table>
+    <thead><tr><th>暱稱</th><th>還沒完成</th></tr></thead>
+    <tbody>
+    {% for plan in plans %}
+      <tr>
+        <td><a class="row-link" href="/teacher/students/{{ plan.student.student_id }}">{{ plan.student.nickname or '（未設定暱稱）' }}</a></td>
+        <td>{{ plan.item_labels | join('、') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">所有學生都完成了，不需要提醒 🎉</div>
+  {% endif %}
+</div>
+{% endblock %}

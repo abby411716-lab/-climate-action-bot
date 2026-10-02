@@ -31,6 +31,19 @@ def option_label(options: list[str], option: str) -> str:
     return f"{OPTION_LETTERS[options.index(option)]}. {option}"
 
 
+def answer_actions(question: models.Question) -> list[PostbackAction]:
+    """每個選項一顆作答按鈕（按鈕上只有字母），每日推送的 Quick Reply 和提醒訊息共用。"""
+    options = question.options[:13]
+    return [
+        PostbackAction(
+            label=OPTION_LETTERS[idx],
+            data=f"{ANSWER_POSTBACK_PREFIX}{question.question_id}|{idx}",
+            display_text=option_label(options, option)[:300],
+        )
+        for idx, option in enumerate(options)
+    ]
+
+
 def _build_quiz_messages(question: models.Question) -> list:
     messages = []
     if question.knowledge_card_image_url:
@@ -43,16 +56,7 @@ def _build_quiz_messages(question: models.Question) -> list:
     messages.append(TextMessage(text=f"📘 今日氣候知識卡\n\n{question.knowledge_card_text}"))
 
     options = question.options[:13]
-    items = [
-        QuickReplyItem(
-            action=PostbackAction(
-                label=OPTION_LETTERS[idx],
-                data=f"{ANSWER_POSTBACK_PREFIX}{question.question_id}|{idx}",
-                display_text=option_label(options, option)[:300],
-            )
-        )
-        for idx, option in enumerate(options)
-    ]
+    items = [QuickReplyItem(action=action) for action in answer_actions(question)]
     option_lines = "\n".join(option_label(options, option) for option in options)
     messages.append(
         TextMessage(
