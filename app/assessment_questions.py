@@ -223,7 +223,8 @@ CORE_SCALE_KEYS = [k for k in _CORE_KEYS if QUESTION_DEFS[k]["type"] == "scale"]
 ROUND_LABELS = {"baseline": "前測", "midterm": "中測", "posttest": "後測"}
 
 ROUNDS: dict[str, list[str]] = {
-    "baseline": ["grade", "gender", *_CORE_KEYS, "barriers", "top_motivators"],
+    # "grade"（就讀幾年級）2026/10/2 從前測拿掉，題目定義留著讓已填過的舊回答還能對照
+    "baseline": ["gender", *_CORE_KEYS, "barriers", "top_motivators"],
     "midterm": [*_CORE_KEYS, "barriers", "top_motivators"],
     "posttest": [
         *_CORE_KEYS,

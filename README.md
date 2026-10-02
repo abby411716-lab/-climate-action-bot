@@ -164,7 +164,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 
 前測（baseline）／中測（midterm）／後測（posttest）三輪問卷，題目改編自使用者提供的「青少年氣候行為調查」（教育部青年發展署 Young 飛計畫），內容是自我覺察／態度／行為／動機題（沒有標準答案），跟每日測驗的客觀對錯（`answer_logs`）是分開的兩種資料。
 
-- `app/assessment_questions.py`：題目定義（`QUESTION_DEFS`）跟每輪要問哪些題（`ROUNDS`）都在這裡集中管理，改題目或調整輪次內容只需要改這個檔案。核心題三輪都問（可以畫出同一個學生的前中後變化曲線）；年級/性別只在前測問一次（存進 `students.grade` / `students.gender`，不會每輪都問）；障礙/激勵題前測中測問「介入前」版本，後測換成「介入後」回顧版本；後測額外加課程整體滿意度、自評成長、開放式回饋
+- `app/assessment_questions.py`：題目定義（`QUESTION_DEFS`）跟每輪要問哪些題（`ROUNDS`）都在這裡集中管理，改題目或調整輪次內容只需要改這個檔案。核心題三輪都問（可以畫出同一個學生的前中後變化曲線）；性別只在前測問一次（存進 `students.gender`，不會每輪都問；「就讀幾年級」2026/10/2 已從前測拿掉，之前填過的仍存在 `students.grade`）；障礙/激勵題前測中測問「介入前」版本，後測換成「介入後」回顧版本；後測額外加課程整體滿意度、自評成長、開放式回饋
 - `app/templates/assessment.html` + `app/routers/liff.py`：`GET /liff/assessment?round=baseline|midterm|posttest` 用 Jinja2 依 `assessment_questions.py` 的定義動態產生表單頁面，內嵌 LIFF SDK；`POST /liff/assessment/submit` 收表單送出的答案
 - **身份識別但不顯示**：表單本身不問姓名/帳號（維持匿名體感），但後端會用 `liff.getAccessToken()` 拿到的 access token 呼叫 LINE 的 `GET /v2/profile`（`app/line_client.get_liff_user_id`）換回經過驗證的 `userId`，藉此對應到 `students` 表裡的學生——**刻意不信任前端回傳的任何身份欄位**，因為 `liff.getProfile()` 這類前端呼叫的結果理論上可能被竄改，只有後端自己拿 token 去跟 LINE 換到的 userId 才可信
 - 同一個學生同一輪次重複送出，會覆蓋掉舊答案（`crud.upsert_assessment_response`，靠 `assessment_responses` 的 `(student_id, assessment_round)` unique constraint 判斷）
