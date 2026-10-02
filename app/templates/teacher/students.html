@@ -11,11 +11,12 @@
   </div>
   {% if rows %}
   <table>
-    <thead><tr><th>暱稱</th><th>學校</th><th>稱號</th><th>能量</th><th>連續天數</th><th>徽章數</th></tr></thead>
+    <thead><tr><th>暱稱</th><th>LINE 名稱</th><th>學校</th><th>稱號</th><th>能量</th><th>連續天數</th><th>徽章數</th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
         <td><a class="row-link" href="/teacher/students/{{ row.student.student_id }}">{{ row.student.nickname or '（未設定暱稱）' }}</a></td>
+        <td>{{ row.line_name or '（查不到，可能已封鎖）' }}</td>
         <td>{{ row.school_name }}</td>
         <td>{{ row.rank_name }}</td>
         <td>{{ row.student.total_points }}</td>

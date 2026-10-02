@@ -25,6 +25,7 @@ from app.assessment import broadcast_assessment_invite
 from app.carbon_footprint import broadcast_carbon_footprint_invite
 from app.config import settings
 from app.database import get_db
+from app.line_client import get_display_names
 
 router = APIRouter(prefix="/teacher", tags=["teacher"])
 
@@ -97,9 +98,11 @@ def students_list(request: Request, school_id: int | None = None, db: Session = 
     if resp := require_teacher(request):
         return resp
     students = crud.list_students(db, school_id=school_id)
+    display_names = get_display_names([s.line_user_id for s in students])
     rows = [
         {
             "student": s,
+            "line_name": display_names.get(s.line_user_id),
             "rank_name": game_rules.current_rank(s.total_points)[0],
             "school_name": s.school.school_name if s.school else "（尚未選校）",
         }
@@ -153,6 +156,7 @@ def student_detail(request: Request, student_id: int, db: Session = Depends(get_
             "request": request,
             "active": "students",
             "student": student,
+            "line_name": get_display_names([student.line_user_id]).get(student.line_user_id),
             "rank_name": rank_name,
             "rank_flavor": rank_flavor,
             "badge_names": [game_rules.badge_display(c) for c in student.badges],

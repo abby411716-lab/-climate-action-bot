@@ -11,6 +11,7 @@
     <div class="stat-box"><div class="num">{{ student.longest_streak }}</div><div class="label">最長連續天數</div></div>
   </div>
   <p class="meta" style="margin-top:14px;">
+    LINE 名稱：{{ line_name or '（查不到，可能已封鎖）' }}<br>
     稱號：{{ rank_name }}（{{ rank_flavor }}）<br>
     學校：{{ student.school.school_name if student.school else '（尚未選校）' }}
     {% if student.class_name %} ／ 班級：{{ student.class_name }}{% endif %}
