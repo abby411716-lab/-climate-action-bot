@@ -10,6 +10,16 @@
 - ✅ **解法**：cron-job.org 新增「保持清醒」排程，每 10 分鐘 GET `https://climate-action-bot.onrender.com/health`（不用帶 `X-Admin-Key`），讓伺服器不會休眠。跟 08:00 推題的排程是分開的兩個工作，兩個都要保留
 - ⚠️ Render 免費方案每月 750 小時，這個服務整月開著約 744 小時，剛好夠用；帳號裡如果有其他免費服務也在耗時數就可能不夠，可到 Render 的 Billing 頁面看已用時數
 - ⏭️ 11/1 後測結束後，如果不再使用機器人，記得到 cron-job.org 把「保持清醒」停用
+- 🐛 **Neon 斷線**：伺服器一直醒著後，Neon 閒置約 5 分鐘切斷的舊連線會留在連線池，下一個查詢噴 `SSL connection has been closed unexpectedly`（提醒按鈕 Internal Server Error 就是這個），已加 `pool_pre_ping=True` 修正
+- ✅ 教師後台新增「提醒」頁（`/teacher/reminders`）：只推播給還沒註冊／還沒填前測／還沒答最新一題的學生，10/2 已發送一次
+- ✅ 教師後台學生頁新增「LINE 名稱」欄（LINE 顯示名稱，即時向 LINE 查，不存資料庫）
+- ✅ 前測拿掉「就讀幾年級」
+- 🐛 **碳足跡 LIFF 放錯 Provider**：舊的碳足跡 LIFF（`2011280445-r8e78Taj`）在另一個 Provider，userId 對不上，替 7 位學生各建了一筆沒暱稱的分身（分數和能量記在分身上，機器人也傳不了訊息，提醒發送失敗的 7 位就是他們）。已改用「負碳褶學」Provider 底下的新 LIFF（`2011196878-7T5lmNHh`）：Render 的 `CARBON_LIFF_ID` 已更新、Rich Menu 已重建、舊 LIFF 的 Endpoint URL 已改指 `/liff/carbon-footprint-moved`（只顯示請改從選單進入），老師已實測新 LIFF 填寫後顯示正確暱稱
+
+**⏭️ 下次先做這些事（10/2 新增）**
+1. 從 LINE 官方帳號後台群發，請 10/1～10/2 填過碳足跡的同學從選單「環保打卡」重填一次
+2. 等他們重填後，刪除 7 筆沒暱稱、LINE 名稱查不到、只有碳足跡紀錄的分身學生（連同 `carbon_footprint_responses`），刪除前先列出名單確認
+3. 說明信 `負碳褶學_LINE比歐小助教使用說明.docx` 裡如有舊的碳足跡連結，要改成請學生從選單進入
 
 ## 先前進度快照（2026-10-01）
 
@@ -107,7 +117,7 @@ uvicorn app.main:app --reload
 - `python -m scripts.setup_rich_menu`：產生一張 2500x1686、2x2 四宮格的選單圖片（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。三個按鈕是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理；`環保打卡` 這格改用 URIAction，點下去不經過 webhook，直接開啟碳足跡打卡計算器的 LIFF（`app/carbon_footprint.build_carbon_footprint_url()`，見下方「碳足跡打卡計算器」一節）：
   - `基本資料`：回覆就讀學校
   - `目前狀態`：回覆身分／能量／連續天數／徽章（跟文字訊息查詢共用 `_status_text`）
-  - `環保打卡`：直接開啟碳足跡打卡計算器 LIFF（URIAction，非 postback）
+  - `環保打卡`（postback `menu|eco`，`webhook._eco_menu_message`）：還沒算過碳足跡的學生回覆一顆「開始計算」按鈕開啟碳足跡計算器 LIFF；算過之後改回覆拍照打卡說明，附「拍照」「從相簿選」快速按鈕，並附重新計算碳足跡的連結（2026/10/2 前是 URIAction 直接開計算器）
   - `排行榜`：回覆該校前 10 名（暱稱＋能量）
 - 暱稱設定：學生選完學校後，下一則文字訊息會被當成暱稱存起來（`students.nickname`），設定前選單功能會提示要先設定暱稱。暱稱只存在我們資料庫，跟 LINE 顯示名稱無關，目的是排行榜不曝露 LINE 身份。
 - **拍照打卡**（`app/eco_checkin.py` + 學生傳圖片訊息，跟碳足跡計算器是分開的機制，見下方「碳足跡打卡計算器」一節的說明）：學生傳照片給 bot → 用 LINE Blob API 下載原圖 → 用 Pillow 壓縮成長邊 ≤1000px、JPEG quality 70 → 存進新的 `eco_checkins` 表（`status="pending"`）。這個機制目前**不再掛在 Rich Menu 按鈕上**（`環保打卡` 格子已改成開啟碳足跡計算器），純粹靠學生自己傳照片觸發，功能本身不受影響。**設計上刻意先審核再發能量**：

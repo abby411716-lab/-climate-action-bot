@@ -4,11 +4,16 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
+    ButtonsTemplate,
+    CameraAction,
+    CameraRollAction,
     QuickReply,
     QuickReplyItem,
     ReplyMessageRequest,
     PostbackAction,
+    TemplateMessage,
     TextMessage,
+    URIAction,
 )
 from linebot.v3.webhooks import (
     FollowEvent,
@@ -20,6 +25,7 @@ from linebot.v3.webhooks import (
 from sqlalchemy.orm import Session
 
 from app import crud, eco_checkin, game_rules, models
+from app.carbon_footprint import build_carbon_footprint_url
 from app.daily_push import ANSWER_POSTBACK_PREFIX, option_label
 from app.database import get_db
 from app.game_rules import TAIPEI
@@ -75,6 +81,35 @@ def _leaderboard_text(db: Session, school: models.School) -> str:
         prefix = medals[i] if i < len(medals) else f"{i + 1}."
         lines.append(f"{prefix} {s.nickname}｜{s.total_points} 能量")
     return "\n".join(lines)
+
+
+def _eco_menu_message(db: Session, student: models.Student):
+    """選單「環保打卡」：還沒算過碳足跡就先帶去計算器，算過之後改成引導傳照片給老師審核。"""
+    if crud.get_carbon_footprint_response(db, student.student_id) is None:
+        return TemplateMessage(
+            alt_text="碳足跡打卡計算器",
+            template=ButtonsTemplate(
+                text=(
+                    "🧮 第一次環保打卡，先花 2 分鐘算出你的「綠色分數」吧！"
+                    f"完成可以拿到 {game_rules.CARBON_CALC_POINTS} 能量 🌱"
+                ),
+                actions=[URIAction(label="開始計算", uri=build_carbon_footprint_url())],
+            ),
+        )
+    return TextMessage(
+        text=(
+            "📸 環保打卡：把你的環保行動照片傳給我就可以了！\n"
+            "（例如：自備餐具、搭乘大眾運輸、資源回收⋯⋯）\n\n"
+            f"老師審核通過後會發放 {game_rules.ECO_CHECKIN_POINTS} 能量，也可能解鎖徽章！\n\n"
+            f"想更新綠色分數，也可以重新計算碳足跡：{build_carbon_footprint_url()}"
+        ),
+        quick_reply=QuickReply(
+            items=[
+                QuickReplyItem(action=CameraAction(label="📷 拍照")),
+                QuickReplyItem(action=CameraRollAction(label="🖼️ 從相簿選")),
+            ]
+        ),
+    )
 
 
 def _handle_follow(event: FollowEvent, db: Session) -> None:
@@ -136,6 +171,8 @@ def _handle_menu_postback(event: PostbackEvent, db: Session, data: str) -> None:
         reply = TextMessage(text=_profile_text(student, school))
     elif action == "status":
         reply = TextMessage(text=_status_text(student))
+    elif action == "eco":
+        reply = _eco_menu_message(db, student)
     elif action == "checkin_info":
         reply = TextMessage(
             text=(
