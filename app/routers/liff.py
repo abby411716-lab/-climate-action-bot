@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -31,10 +32,11 @@ def assessment_form(request: Request):
 
 @router.get("/carbon-footprint")
 def carbon_footprint_form(request: Request):
-    """碳足跡打卡計算器獨立的 LIFF App／Endpoint URL（獨立的 LINE Login channel，
+    """碳足跡打卡計算器獨立的 LIFF App／Endpoint URL（對應 .env 的 CARBON_LIFF_ID），
 
-    對應 .env 的 CARBON_LIFF_ID），跟成效評估問卷（/liff/assessment，LIFF_ID）分開，
-    改哪一個都不會影響另一個。頁面模板共用 assessment.html 這個殼子，但這裡不需要
+    跟成效評估問卷（/liff/assessment，LIFF_ID）是同一個 LINE Login channel 底下的兩個 LIFF App，
+    改哪一個都不會影響另一個。LIFF 一定要跟機器人（Messaging API channel）在同一個 Provider，
+    LINE 給的 userId 是依 Provider 分開的，不同 Provider 會讓同一個學生在系統裡變成兩個人。頁面模板共用 assessment.html 這個殼子，但這裡不需要
     像 /assessment 那樣等前端從 query string 讀参數才知道要顯示什麼——路徑本身就決定了
     是碳足跡計算器，直接在伺服器端把 mode 傳給前端即可。
     """
@@ -85,6 +87,21 @@ def submit_assessment(payload: AssessmentSubmitRequest, db: Session = Depends(ge
 
     crud.upsert_assessment_response(db, student, payload.assessment_round, cleaned)
     return {"status": "ok"}
+
+
+@router.get("/carbon-footprint-moved", response_class=HTMLResponse)
+def carbon_footprint_moved():
+    """舊的碳足跡 LIFF（2011280445-r8e78Taj，放在另一個 Provider）的 Endpoint URL 改指到這裡。
+
+    舊 LIFF 拿到的 userId 跟機器人對不起來，會替學生多建一筆分身，所以不再開放填寫，
+    請學生改從選單的「環保打卡」進入新的 LIFF。
+    """
+    return """<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>碳足跡打卡計算器</title></head>
+<body style="font-family:sans-serif;padding:32px 20px;text-align:center;line-height:1.8;color:#2b3a2b;">
+<h2>這個連結已經更新了 🌱</h2>
+<p>請關閉這個頁面，回到「比歐小助教」聊天室，<br>點下方選單的<strong>「環保打卡」</strong>重新進入碳足跡打卡計算器。</p>
+</body></html>"""
 
 
 @router.get("/carbon-footprint/questions")

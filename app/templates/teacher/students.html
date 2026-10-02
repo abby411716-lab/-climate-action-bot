@@ -16,7 +16,7 @@
     {% for row in rows %}
       <tr>
         <td><a class="row-link" href="/teacher/students/{{ row.student.student_id }}">{{ row.student.nickname or '（未設定暱稱）' }}</a></td>
-        <td>{{ row.line_name or '（查不到，可能已封鎖）' }}</td>
+        <td>{{ row.line_name or '（查不到，可能已封鎖或不是好友）' }}</td>
         <td>{{ row.school_name }}</td>
         <td>{{ row.rank_name }}</td>
         <td>{{ row.student.total_points }}</td>
