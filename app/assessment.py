@@ -46,7 +46,8 @@ def broadcast_assessment_invite(assessment_round: str) -> None:
     url = build_assessment_url(assessment_round)
     text = (
         f"📋 {round_label}問卷來囉！\n\n"
-        f"幫我們花 3~5 分鐘填一下這份匿名問卷，讓我們了解大家在氣候行動上的變化 🌱\n\n"
+        f"幫我們花 3~5 分鐘填一下這份問卷，讓我們了解大家在氣候行動上的變化 🌱\n"
+        f"問卷不用填名字，你的回答只用於研究分析，不會公開，也不會影響成績。\n\n"
         f"{url}"
     )
 

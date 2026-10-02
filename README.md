@@ -2,7 +2,16 @@
 
 依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援、前測/中測/後測成效評估問卷（LIFF 表單）、碳足跡打卡計算器（LIFF 表單，算出「綠色分數」），以及教師後台網頁（總覽／學生列表與個別學生頁／題目分析／成效總覽／碳足跡／打卡審核）。
 
-## 目前進度快照（2026-10-01）
+## 目前進度快照（2026-10-02）
+
+**10/2 變更摘要**
+- 🐛 **問題**：學生點每日小測驗的答案按鈕後，LINE 機器人沒有回應
+- 🔍 **原因**：Render 免費方案閒置約 15 分鐘就休眠，喚醒要約 30 秒（Render Logs 看到 10:41:38 開機、10:42:09 才就緒）。LINE 不會等這麼久，叫醒伺服器的那次答題請求就遺失了，學生看到的就是「沒反應」；伺服器醒著時再按就會正常回覆。程式本身沒有問題（本機模擬答題可正常回覆）
+- ✅ **解法**：cron-job.org 新增「保持清醒」排程，每 10 分鐘 GET `https://climate-action-bot.onrender.com/health`（不用帶 `X-Admin-Key`），讓伺服器不會休眠。跟 08:00 推題的排程是分開的兩個工作，兩個都要保留
+- ⚠️ Render 免費方案每月 750 小時，這個服務整月開著約 744 小時，剛好夠用；帳號裡如果有其他免費服務也在耗時數就可能不夠，可到 Render 的 Billing 頁面看已用時數
+- ⏭️ 11/1 後測結束後，如果不再使用機器人，記得到 cron-job.org 把「保持清醒」停用
+
+## 先前進度快照（2026-10-01）
 
 **9/30～10/1 變更摘要**
 - 🔥 **資料庫搬家**：Render 免費 PostgreSQL 建立 30 天後過期並被刪除（舊資料全數遺失），改用 **Neon 免費 PostgreSQL**（不會過期，地區 US West 2 / Oregon）。連線網址在 Render 後台 Environment 的 `DATABASE_URL` 手動設定；本機另存一份在 `neon_url.txt`（已 gitignore，不會上傳）
@@ -144,7 +153,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 4. 部署完成後會拿到一個固定網址，例如 `https://climate-action-bot.onrender.com`
 5. 到 LINE Developers Console → Messaging API 頁籤，把 Webhook URL 設成 `https://climate-action-bot.onrender.com/webhook`，按 Verify 確認成功，並開啟「Use webhook」
 
-**注意**：資料庫使用 [Neon](https://neon.tech) 免費 PostgreSQL（地區 AWS US West 2 / Oregon，跟 Render 服務同區），免費方案不會過期。原本用的 Render 免費 PostgreSQL 建立 30 天後就過期、之後被刪除（2026/9 月底發生過，資料全數遺失），所以改用 Neon。`DATABASE_URL` 在 `render.yaml` 設為 `sync: false`，實際連線網址要在 Render 後台 climate-action-bot → Environment 手動設定（用 Neon 的直接連線網址，不要用主機名稱含 `-pooler` 的那個）。換到新的空資料庫時：先 `alembic upgrade head` 建表，再用 `python -m scripts.copy_questions_from_sqlite` 把本機題庫搬過去，學校用 `scripts/seed_school.py` 重建。免費方案 Web Service 閒置一段時間會休眠，第一個請求可能要等數十秒喚醒，LINE 平台通常會重試 webhook，不影響功能但體驗上第一次互動可能稍慢。
+**注意**：資料庫使用 [Neon](https://neon.tech) 免費 PostgreSQL（地區 AWS US West 2 / Oregon，跟 Render 服務同區），免費方案不會過期。原本用的 Render 免費 PostgreSQL 建立 30 天後就過期、之後被刪除（2026/9 月底發生過，資料全數遺失），所以改用 Neon。`DATABASE_URL` 在 `render.yaml` 設為 `sync: false`，實際連線網址要在 Render 後台 climate-action-bot → Environment 手動設定（用 Neon 的直接連線網址，不要用主機名稱含 `-pooler` 的那個）。換到新的空資料庫時：先 `alembic upgrade head` 建表，再用 `python -m scripts.copy_questions_from_sqlite` 把本機題庫搬過去，學校用 `scripts/seed_school.py` 重建。免費方案 Web Service 閒置約 15 分鐘會休眠，第一個請求要等約 30 秒喚醒；實測 LINE 不會等這麼久，叫醒伺服器的那次 webhook 會遺失（學生點了按鈕卻沒回應），所以用 cron-job.org 每 10 分鐘 GET `/health` 讓服務保持清醒（見 2026-10-02 進度快照）。
 
 （本專案一開始用本機 SQLite 起步是延續規格書第 7 節的建議，但實測發現 Render 免費方案的 Web Service 檔案系統在服務休眠喚醒時會重置，SQLite 檔案跟著消失，所以提早換成 PostgreSQL；本機開發若不想裝 PostgreSQL，`DATABASE_URL` 留空或設回 `sqlite:///./climate_action.db` 仍可用 SQLite。）
 
