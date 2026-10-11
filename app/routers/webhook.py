@@ -71,12 +71,12 @@ def _profile_text(student: models.Student, school: models.School | None) -> str:
     return f"🏫 就讀學校：{school.school_name if school else '尚未設定'}\n📛 暱稱：{student.nickname or '尚未設定'}"
 
 
-def _leaderboard_text(db: Session, school: models.School) -> str:
-    students = crud.get_leaderboard(db, school.school_id, limit=10)
+def _leaderboard_text(db: Session) -> str:
+    students = crud.get_leaderboard(db, limit=10)
     if not students:
-        return f"🏆 {school.school_name} 排行榜\n\n目前還沒有資料，快去答題或環保打卡衝積分吧！"
+        return "🏆 排行榜\n\n目前還沒有資料，快去答題或環保打卡衝積分吧！"
     medals = ["🥇", "🥈", "🥉"]
-    lines = [f"🏆 {school.school_name} 排行榜 TOP {len(students)}"]
+    lines = [f"🏆 排行榜 TOP {len(students)}"]
     for i, s in enumerate(students):
         prefix = medals[i] if i < len(medals) else f"{i + 1}."
         lines.append(f"{prefix} {s.nickname}｜{s.total_points} 能量")
@@ -182,8 +182,7 @@ def _handle_menu_postback(event: PostbackEvent, db: Session, data: str) -> None:
             )
         )
     elif action == "leaderboard":
-        school = crud.get_school_by_id(db, student.school_id)
-        reply = TextMessage(text=_leaderboard_text(db, school))
+        reply = TextMessage(text=_leaderboard_text(db))
     else:
         return
 

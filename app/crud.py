@@ -66,10 +66,11 @@ def set_student_nickname(db: Session, student: models.Student, nickname: str) ->
     return student
 
 
-def get_leaderboard(db: Session, school_id: int, limit: int = 10) -> list[models.Student]:
+def get_leaderboard(db: Session, limit: int = 10) -> list[models.Student]:
+    """全體學生一起排，不分學校。"""
     return (
         db.query(models.Student)
-        .filter(models.Student.school_id == school_id, models.Student.nickname.isnot(None))
+        .filter(models.Student.nickname.isnot(None))
         .order_by(models.Student.total_points.desc())
         .limit(limit)
         .all()
