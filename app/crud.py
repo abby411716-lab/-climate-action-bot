@@ -51,6 +51,14 @@ def get_student_by_id(db: Session, student_id: int) -> models.Student | None:
     return db.query(models.Student).filter(models.Student.student_id == student_id).first()
 
 
+def delete_student(db: Session, student: models.Student) -> None:
+    """刪掉學生和他所有的作答、打卡、問卷、碳足跡紀錄（外鍵沒設 cascade，要先刪子表）。"""
+    for model in (models.AnswerLog, models.EcoCheckin, models.AssessmentResponse, models.CarbonFootprintResponse):
+        db.query(model).filter(model.student_id == student.student_id).delete(synchronize_session=False)
+    db.delete(student)
+    db.commit()
+
+
 def set_student_nickname(db: Session, student: models.Student, nickname: str) -> models.Student:
     student.nickname = nickname
     db.commit()

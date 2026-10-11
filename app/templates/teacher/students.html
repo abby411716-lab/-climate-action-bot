@@ -1,6 +1,11 @@
 {% extends "teacher/base.html" %}
 {% block title %}學生列表{% endblock %}
 {% block content %}
+{% if deleted %}
+<div class="card" style="background:#eef7ee;">
+  <p style="margin:0; color:#1f5c2b; font-weight:600;">✅ 已刪除學生「{{ deleted }}」和他的所有紀錄</p>
+</div>
+{% endif %}
 <div class="card">
   <h2>學生列表{% if selected_school_id %}（已篩選學校）{% endif %}</h2>
   <div class="filter-bar">

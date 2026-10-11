@@ -94,7 +94,9 @@ def overview(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/students")
-def students_list(request: Request, school_id: int | None = None, db: Session = Depends(get_db)):
+def students_list(
+    request: Request, school_id: int | None = None, deleted: str | None = None, db: Session = Depends(get_db)
+):
     if resp := require_teacher(request):
         return resp
     students = crud.list_students(db, school_id=school_id)
@@ -116,6 +118,7 @@ def students_list(request: Request, school_id: int | None = None, db: Session = 
             "rows": rows,
             "schools": crud.list_schools(db),
             "selected_school_id": school_id,
+            "deleted": deleted,
         },
     )
 
@@ -168,6 +171,18 @@ def student_detail(request: Request, student_id: int, db: Session = Depends(get_
             "carbon_result": carbon_result,
         },
     )
+
+
+@router.post("/students/{student_id}/delete")
+def student_delete(request: Request, student_id: int, db: Session = Depends(get_db)):
+    if resp := require_teacher(request):
+        return resp
+    student = crud.get_student_by_id(db, student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    label = student.nickname or f"編號 {student_id}"
+    crud.delete_student(db, student)
+    return RedirectResponse(url=f"/teacher/students?deleted={quote(label)}", status_code=303)
 
 
 @router.get("/knowledge-cards")

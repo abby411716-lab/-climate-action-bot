@@ -135,4 +135,12 @@
   <div class="empty">尚未填寫任何問卷</div>
   {% endif %}
 </div>
+<div class="card">
+  <h2>刪除學生</h2>
+  <p class="meta" style="margin:0 0 14px;">會一併刪掉這位學生的答題、環保打卡、成效問卷和碳足跡紀錄，刪除後無法復原。學生之後如果再跟機器人互動，會被當成新學生從頭開始。</p>
+  <form method="post" action="/teacher/students/{{ student.student_id }}/delete"
+        onsubmit="return confirm('確定要刪除這位學生和他的所有紀錄嗎？刪除後無法復原。');">
+    <button type="submit" class="btn btn-reject" style="padding: 9px 18px;">刪除這位學生</button>
+  </form>
+</div>
 {% endblock %}
