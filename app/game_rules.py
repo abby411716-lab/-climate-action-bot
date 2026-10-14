@@ -15,6 +15,9 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 
 CORRECT_POINTS = 10
 INCORRECT_POINTS = 2  # 答錯仍給少量「參與能量」，鼓勵每天持續作答
+# 補做（推送日之後才作答）給一半能量，鼓勵學生當天就作答
+MAKEUP_CORRECT_POINTS = 5
+MAKEUP_INCORRECT_POINTS = 1
 ECO_CHECKIN_POINTS = 15  # 拍照打卡經老師審核通過後發放的能量，比答題略高以鼓勵實際行動
 CARBON_CALC_POINTS = 20  # 首次完成碳足跡打卡計算器發放的能量，題目較多、要花時間思考，比打卡略高
 

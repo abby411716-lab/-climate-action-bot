@@ -1,4 +1,5 @@
-"""提醒還沒完成的學生：還沒註冊（選學校＋暱稱）、還沒填前測、還沒答最新推送的那一題。
+"""提醒還沒完成的學生：還沒註冊（選學校＋暱稱）、還沒填前測、還沒答最新推送的那一題、
+還有之前漏答的題目可以補做（補做題目不直接附在提醒裡，提醒學生從選單「補做題目」自己補）。
 
 只發給 students 表裡有紀錄、且至少缺一項的人；不在資料庫裡的好友（換資料庫後從沒跟
 機器人互動過的人）找不到，要另外從 LINE 官方帳號後台群發。
@@ -13,18 +14,15 @@
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 
-from linebot.v3.messaging import (
-    ButtonsTemplate,
-    PushMessageRequest,
-    TemplateMessage,
-    TextMessage,
-)
+from linebot.v3.messaging import PushMessageRequest, TextMessage
 from sqlalchemy.orm import Session
 
-from app import assessment_questions, crud, models
+from app import assessment_questions, crud, makeup, models
 from app.assessment import build_assessment_url
-from app.daily_push import answer_actions, option_label
+from app.daily_push import quiz_with_buttons_messages
+from app.game_rules import TAIPEI
 from app.line_client import get_messaging_api
 from app.routers.webhook import _school_selection_message
 
@@ -40,6 +38,7 @@ class ReminderPlan:
     needs_nickname: bool
     needs_assessment: bool
     needs_quiz: bool
+    makeup_count: int = 0  # 漏答的舊題目數（不含 needs_quiz 那一題），學生從選單「補做題目」自己補
 
     @property
     def needs_registration(self) -> bool:
@@ -54,6 +53,8 @@ class ReminderPlan:
             labels.append(f"{assessment_questions.ROUND_LABELS[REMINDER_ASSESSMENT_ROUND]}問卷")
         if self.needs_quiz:
             labels.append("小測驗")
+        if self.makeup_count:
+            labels.append(f"補做 {self.makeup_count} 題")
         return labels
 
 
@@ -69,6 +70,7 @@ def build_reminder_plans(db: Session, question: models.Question | None) -> list[
         if question
         else set()
     )
+    missed = makeup.missed_question_ids_by_student(db, datetime.now(TAIPEI).date())
     plans = []
     for student in crud.list_students(db):
         plan = ReminderPlan(
@@ -77,6 +79,9 @@ def build_reminder_plans(db: Session, question: models.Question | None) -> list[
             needs_nickname=student.nickname is None,
             needs_assessment=student.student_id not in assessed,
             needs_quiz=question is not None and student.student_id not in answered,
+            makeup_count=len(
+                [qid for qid in missed.get(student.student_id, []) if not question or qid != question.question_id]
+            ),
         )
         if plan.item_labels:
             plans.append(plan)
@@ -96,19 +101,16 @@ def _build_reminder_messages(db: Session, plan: ReminderPlan, question: models.Q
         )
     if plan.needs_quiz:
         lines.append("❓ 回答小測驗（題目在下面）")
+    if plan.makeup_count:
+        lines.append(
+            f"📝 還有 {plan.makeup_count} 題之前的小測驗可以補做（能量減半），"
+            "點下方選單「補做題目」或直接打「補做」就會出題"
+        )
     messages = [TextMessage(text="\n\n".join(lines))]
 
     if plan.needs_quiz:
-        options = question.options[:13]
-        option_lines = "\n".join(option_label(options, option) for option in options)
         date_label = f"{question.scheduled_date.month}/{question.scheduled_date.day} " if question.scheduled_date else ""
-        messages.append(TextMessage(text=f"❓ {date_label}小測驗\n\n{question.question_text}\n\n{option_lines}"))
-        messages.append(
-            TemplateMessage(
-                alt_text="小測驗作答按鈕",
-                template=ButtonsTemplate(text="👇 點選你的答案", actions=answer_actions(question)[:4]),
-            )
-        )
+        messages.extend(quiz_with_buttons_messages(question, f"❓ {date_label}小測驗"))
 
     # 選學校按鈕是 Quick Reply，只會出現在最後一則訊息，所以註冊一定要放最後
     if plan.needs_school:

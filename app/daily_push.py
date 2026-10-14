@@ -5,10 +5,12 @@ from datetime import date, datetime
 
 from linebot.v3.messaging import (
     BroadcastRequest,
+    ButtonsTemplate,
     ImageMessage,
     PostbackAction,
     QuickReply,
     QuickReplyItem,
+    TemplateMessage,
     TextMessage,
 )
 
@@ -57,6 +59,23 @@ def answer_actions(question: models.Question) -> list[PostbackAction]:
             display_text=option_label(options, option)[:300],
         )
         for idx, option in enumerate(options)
+    ]
+
+
+def quiz_with_buttons_messages(question: models.Question, heading: str) -> list:
+    """題目文字＋Buttons 範本作答按鈕（提醒、補做題目共用）。
+
+    跟每日推送不同，這裡用 Buttons 範本而不是 Quick Reply：Buttons 的按鈕會一直留在訊息上，
+    Quick Reply 只要聊天室出現下一則訊息就消失。選項固定 4 個，剛好是 Buttons 範本的上限。
+    """
+    options = question.options[:13]
+    option_lines = "\n".join(option_label(options, option) for option in options)
+    return [
+        TextMessage(text=f"{heading}\n\n{question.question_text}\n\n{option_lines}"),
+        TemplateMessage(
+            alt_text="小測驗作答按鈕",
+            template=ButtonsTemplate(text="👇 點選你的答案", actions=answer_actions(question)[:4]),
+        ),
     ]
 
 

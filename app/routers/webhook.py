@@ -24,7 +24,7 @@ from linebot.v3.webhooks import (
 )
 from sqlalchemy.orm import Session
 
-from app import crud, eco_checkin, game_rules, models
+from app import crud, eco_checkin, game_rules, makeup, models
 from app.carbon_footprint import build_carbon_footprint_url
 from app.daily_push import ANSWER_POSTBACK_PREFIX, option_label
 from app.database import get_db
@@ -183,6 +183,10 @@ def _handle_menu_postback(event: PostbackEvent, db: Session, data: str) -> None:
         )
     elif action == "leaderboard":
         reply = TextMessage(text=_leaderboard_text(db))
+    elif action == makeup.MAKEUP_MENU_ACTION:
+        messages = makeup.makeup_reply_messages(db, student, datetime.now(TAIPEI).date())
+        api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=messages))
+        return
     else:
         return
 
@@ -216,10 +220,16 @@ def _handle_answer_postback(event: PostbackEvent, db: Session, data: str) -> Non
     today = datetime.now(TAIPEI).date()
     previous_date = previous_log.answered_at.astimezone(TAIPEI).date() if previous_log else None
 
+    is_makeup = makeup.is_makeup(db, question_id, today)
+    if is_makeup:
+        earned = game_rules.MAKEUP_CORRECT_POINTS if is_correct else game_rules.MAKEUP_INCORRECT_POINTS
+    else:
+        earned = game_rules.CORRECT_POINTS if is_correct else game_rules.INCORRECT_POINTS
+
     crud.create_answer_log(db, student.student_id, question_id, selected_option, is_correct)
 
     new_streak = game_rules.next_streak(previous_date, today, student.current_streak)
-    new_points = student.total_points + (game_rules.CORRECT_POINTS if is_correct else game_rules.INCORRECT_POINTS)
+    new_points = student.total_points + earned
     new_longest = max(student.longest_streak, new_streak)
 
     stats = {
@@ -242,20 +252,37 @@ def _handle_answer_postback(event: PostbackEvent, db: Session, data: str) -> Non
 
     rank_name, rank_flavor = game_rules.current_rank(new_points)
 
+    makeup_note = "（補做能量減半）" if is_makeup else ""
     lines = []
     if is_correct:
-        lines.append(f"✅ 答對了！+{game_rules.CORRECT_POINTS} 能量")
+        lines.append(f"✅ 答對了！+{earned} 能量{makeup_note}")
     else:
         lines.append(
             f"❌ 可惜，正確答案是「{option_label(question.options, question.correct_option)}」"
-            f" +{game_rules.INCORRECT_POINTS} 能量（感謝你的參與）"
+            f" +{earned} 能量{makeup_note or '（感謝你的參與）'}"
         )
     lines.append(f"目前能量：{new_points}｜連續天數：{new_streak}（最長 {new_longest}）")
     lines.append(f"目前身分：{rank_name}\n{rank_flavor}")
     if new_badges:
         lines.append("\n".join(f"🏅 解鎖新徽章：{name}" for _code, name in new_badges))
 
-    reply = TextMessage(text="\n\n".join(lines))
+    # 還有漏答的舊題目就附「繼續補做」按鈕，學生不用回去找選單
+    quick_reply = None
+    if remaining := len(makeup.missed_question_ids(db, student.student_id, today)):
+        lines.append(f"📝 你還有 {remaining} 題可以補做")
+        quick_reply = QuickReply(
+            items=[
+                QuickReplyItem(
+                    action=PostbackAction(
+                        label="📝 繼續補做",
+                        data=f"{MENU_POSTBACK_PREFIX}{makeup.MAKEUP_MENU_ACTION}",
+                        display_text="補做題目",
+                    )
+                )
+            ]
+        )
+
+    reply = TextMessage(text="\n\n".join(lines), quick_reply=quick_reply)
     api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[reply]))
 
 
@@ -289,6 +316,10 @@ def _handle_text_message(event: MessageEvent, db: Session) -> None:
                     "之後可以用下方選單查看基本資料、目前狀態、排行榜，或直接傳照片做環保打卡！"
                 )
             )
+    elif event.message.text.strip() in makeup.MAKEUP_KEYWORDS:
+        messages = makeup.makeup_reply_messages(db, student, datetime.now(TAIPEI).date())
+        api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=messages))
+        return
     else:
         reply = TextMessage(text=_status_text(student))
     api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[reply]))

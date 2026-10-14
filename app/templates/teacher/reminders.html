@@ -10,8 +10,12 @@
 <div class="card">
   <h2>提醒還沒完成的學生</h2>
   <p class="meta" style="margin:0 0 10px;">
-    只發給下表的學生，每人依缺的項目收到不同內容：還沒註冊的附選學校按鈕或暱稱引導、還沒填{{ assessment_label }}的附問卷連結、還沒答最新一題{% if question %}（{{ question.scheduled_date.month }}/{{ question.scheduled_date.day }}）{% endif %}的重新附上題目和 A／B／C／D 按鈕。
+    只發給下表的學生，每人依缺的項目收到不同內容：還沒註冊的附選學校按鈕或暱稱引導、還沒填{{ assessment_label }}的附問卷連結、還沒答最新一題{% if question %}（{{ question.scheduled_date.month }}/{{ question.scheduled_date.day }}）{% endif %}的重新附上題目和 A／B／C／D 按鈕、還有之前漏答題目的提醒學生從選單「補做題目」（或打字「補做」）自己補。
     一個人不管缺幾項都只算 1 則訊息額度。換資料庫後從沒跟機器人互動過的好友不在資料庫裡，這裡找不到，要另外從 LINE 官方帳號後台群發。
+  </p>
+  <p class="meta" style="margin:0 0 10px;">
+    📝 補做規則：推送日之後才作答的題目算「補做」，能量減半（答對 +{{ makeup_correct_points }}、答錯 +{{ makeup_incorrect_points }}）。
+    學生補做是用回覆訊息出題，不耗 LINE 額度；只有這裡按「發送提醒」才會用到額度。
   </p>
   <p class="meta" style="margin:0 0 14px;">
     本次會發送：<strong>{{ plans | length }} 人</strong>（用掉 {{ plans | length }} 則額度）

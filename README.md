@@ -125,7 +125,7 @@ uvicorn app.main:app --reload
 
 ## Rich Menu ＋ 暱稱 ＋ 環保打卡 ＋ 排行榜
 
-- `python -m scripts.setup_rich_menu`：產生一張 2500x1686、2x2 四宮格的選單圖片（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。三個按鈕是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理；`環保打卡` 這格改用 URIAction，點下去不經過 webhook，直接開啟碳足跡打卡計算器的 LIFF（`app/carbon_footprint.build_carbon_footprint_url()`，見下方「碳足跡打卡計算器」一節）：
+- `python -m scripts.setup_rich_menu`：產生一張 2500x1686 的選單圖片（上排 3 格：基本資料／目前狀態／補做題目，下排 2 格：環保打卡／排行榜）（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。三個按鈕是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理；`環保打卡` 這格改用 URIAction，點下去不經過 webhook，直接開啟碳足跡打卡計算器的 LIFF（`app/carbon_footprint.build_carbon_footprint_url()`，見下方「碳足跡打卡計算器」一節）：
   - `基本資料`：回覆就讀學校
   - `目前狀態`：回覆身分／能量／連續天數／徽章（跟文字訊息查詢共用 `_status_text`）
   - `環保打卡`（postback `menu|eco`，`webhook._eco_menu_message`）：還沒算過碳足跡的學生回覆一顆「開始計算」按鈕開啟碳足跡計算器 LIFF；算過之後改回覆拍照打卡說明，附「拍照」「從相簿選」快速按鈕，並附重新計算碳足跡的連結（2026/10/2 前是 URIAction 直接開計算器）
@@ -145,6 +145,7 @@ uvicorn app.main:app --reload
 - **登入方式**：沿用既有的 `ADMIN_API_KEY`（跟 `/admin` 系列 JSON API 共用同一把金鑰），不是另外的帳號系統，所有老師權限相同。`/teacher/login` 頁面輸入金鑰後，正確的話會存進一個 httpOnly cookie（`teacher_key`，效期 30 天），之後每個 `/teacher/*` 頁面都是看這個 cookie 判斷是否已登入，不用像 `/admin` API 那樣每次手動帶 `X-Admin-Key` Header。`/teacher/logout` 清掉 cookie。
 - **姓名標記（不是權限控管）**：登入時除了金鑰，還要填一個姓名，存進另一個 httpOnly cookie（`teacher_name`）。這個姓名**不驗證身份**、純粹讓審核打卡時知道「是誰做的」——`eco_checkins` 表新增了 `reviewed_by` 欄位，通過／拒絕打卡時會把目前登入的姓名存進去，之後在「打卡審核」列表跟個別學生頁都看得到是哪位老師審核的。cookie value 只能放 latin-1 字元（HTTP header 限制），中文姓名存之前用 `urllib.parse.quote` 編碼、讀出來時 `unquote` 解碼（`app/routers/teacher.py` 的 `_teacher_name()`），直接塞原始中文字串進 `set_cookie` 會讓伺服器噴 500。
 - **提醒**（`/teacher/reminders`，程式在 `app/reminders.py`）：列出資料庫裡還沒完成的學生（還沒註冊、還沒填前測、還沒答最新推送的那一題）和本月 LINE 訊息額度，按按鈕後用 Push Message 只發給這些人，每人依缺的項目收到不同內容（選學校按鈕／暱稱引導、問卷連結、重新附上題目＋A～D 作答按鈕），一人只算 1 則額度。換資料庫後從沒跟機器人互動過的好友不在 `students` 表裡，這裡找不到，要另外從 LINE 官方帳號後台群發。
+- **補做題目**（程式在 `app/makeup.py`）：推送日之後才作答的題目算「補做」，能量減半（`game_rules.MAKEUP_CORRECT_POINTS`／`MAKEUP_INCORRECT_POINTS`，答對 +5、答錯 +1）。學生點選單「補做題目」（`menu|makeup`）或打字「補做」，機器人用回覆訊息出最舊的一題漏答題目（不耗額度），答完如果還有漏答會附「繼續補做」按鈕。提醒頁的名單會顯示「補做 N 題」，提醒訊息也會提醒學生去補做。
 - **總覽**（`/teacher`）：學生總數、待審核打卡數、前測/中測/後測問卷已回收份數，以及各校學生數／已設定暱稱人數／平均能量。
 - **學生列表 ＋ 個別學生頁**（`/teacher/students`、`/teacher/students/{id}`）：列表可用學校篩選；個別學生頁彙整這位學生的能量／連續天數／稱號／徽章、完整答題紀錄、環保打卡紀錄（含照片連結）、以及每一輪成效評估問卷的完整回覆（選項代碼會轉回中文顯示文字）。列表的「LINE 名稱」是即時向 LINE 查的顯示名稱，學生封鎖或沒加好友就查不到。
   - **刪除學生**：個別學生頁最下方的「刪除這位學生」按鈕（`POST /teacher/students/{id}/delete`），會跳確認視窗，確認後由 `crud.delete_student` 先刪 `answer_logs`、`eco_checkins`、`assessment_responses`、`carbon_footprint_responses`（外鍵沒設 cascade，要先刪子表）再刪 `students`，刪完導回學生列表顯示提示。無法復原，被刪的學生之後再互動會被當成新學生。

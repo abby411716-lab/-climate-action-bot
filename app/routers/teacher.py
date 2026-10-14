@@ -268,6 +268,8 @@ def reminders_page(
             "question": question,
             "assessment_label": assessment_questions.ROUND_LABELS[reminders.REMINDER_ASSESSMENT_ROUND],
             "quota": reminders.message_quota(),
+            "makeup_correct_points": game_rules.MAKEUP_CORRECT_POINTS,
+            "makeup_incorrect_points": game_rules.MAKEUP_INCORRECT_POINTS,
             "sent": sent,
             "failed": failed,
         },

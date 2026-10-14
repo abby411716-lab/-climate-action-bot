@@ -201,6 +201,19 @@ def list_pushed_question_ids(db: Session) -> set[int]:
     return {question_id for (question_id,) in db.query(models.DailyPush.question_id).all()}
 
 
+def list_daily_pushes(db: Session) -> list[models.DailyPush]:
+    return db.query(models.DailyPush).order_by(models.DailyPush.pushed_at).all()
+
+
+def get_daily_push_for_question(db: Session, question_id: int) -> models.DailyPush | None:
+    return db.query(models.DailyPush).filter(models.DailyPush.question_id == question_id).first()
+
+
+def list_answered_question_ids(db: Session) -> set[tuple[int, int]]:
+    """所有 (student_id, question_id) 作答配對，給補做題目一次算出每位學生漏答哪些題。"""
+    return set(db.query(models.AnswerLog.student_id, models.AnswerLog.question_id).all())
+
+
 def get_latest_daily_push(db: Session) -> models.DailyPush | None:
     return db.query(models.DailyPush).order_by(models.DailyPush.pushed_at.desc()).first()
 

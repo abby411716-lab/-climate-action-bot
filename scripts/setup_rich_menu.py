@@ -1,4 +1,4 @@
-"""建立並上傳「氣候行動守護者」LINE Rich Menu（2x2 選單：基本資料／狀態／環保打卡／排行榜）。
+"""建立並上傳「氣候行動守護者」LINE Rich Menu（上排 3 格：基本資料／狀態／補做題目，下排 2 格：環保打卡／排行榜）。
 
 用法：
     python -m scripts.setup_rich_menu
@@ -26,6 +26,7 @@ from app.line_client import get_messaging_api, get_messaging_blob_api
 
 WIDTH, HEIGHT = 2500, 1686
 HALF_W, HALF_H = WIDTH // 2, HEIGHT // 2
+THIRD_W = WIDTH // 3
 
 # (選單按鈕標籤, 圖片上畫的文字, 說明, 底色, postback data)
 # 圖片文字刻意不含 emoji：Windows 中文字型（msjh.ttc）沒有 emoji 字形，畫出來會變成方框；
@@ -35,8 +36,18 @@ HALF_W, HALF_H = WIDTH // 2, HEIGHT // 2
 CELLS = [
     ("🏫 基本資料", "基本資料", "查看就讀學校", (76, 175, 80), "menu|profile"),
     ("🌟 目前狀態", "目前狀態", "能量／連續天數／徽章", (255, 152, 0), "menu|status"),
+    ("📝 補做題目", "補做題目", "補答漏掉的小測驗", (0, 150, 136), "menu|makeup"),
     ("🧮 環保打卡", "環保打卡", "碳足跡計算／拍照打卡", (33, 150, 243), "menu|eco"),
     ("🏆 排行榜", "排行榜", "看看誰是氣候英雄", (156, 39, 176), "menu|leaderboard"),
+]
+
+# 每格的 (x, y, 寬, 高)，順序跟 CELLS 一樣：上排 3 格、下排 2 格
+BOUNDS = [
+    (0, 0, THIRD_W, HALF_H),
+    (THIRD_W, 0, THIRD_W, HALF_H),
+    (THIRD_W * 2, 0, WIDTH - THIRD_W * 2, HALF_H),
+    (0, HALF_H, HALF_W, HEIGHT - HALF_H),
+    (HALF_W, HALF_H, WIDTH - HALF_W, HEIGHT - HALF_H),
 ]
 
 FONT_PATH = r"C:\Windows\Fonts\msjh.ttc"
@@ -55,15 +66,14 @@ def build_image() -> bytes:
     title_font = _load_font(90)
     desc_font = _load_font(48)
 
-    positions = [(0, 0), (HALF_W, 0), (0, HALF_H), (HALF_W, HALF_H)]
-    for (x, y), (_label, image_text, desc, color, _data) in zip(positions, CELLS):
-        draw.rectangle([x, y, x + HALF_W, y + HALF_H], fill=color)
-        draw.rectangle([x, y, x + HALF_W, y + HALF_H], outline=(255, 255, 255), width=6)
+    for (x, y, w, h), (_label, image_text, desc, color, _data) in zip(BOUNDS, CELLS):
+        draw.rectangle([x, y, x + w, y + h], fill=color)
+        draw.rectangle([x, y, x + w, y + h], outline=(255, 255, 255), width=6)
 
         label_bbox = draw.textbbox((0, 0), image_text, font=title_font)
         label_w, label_h = label_bbox[2] - label_bbox[0], label_bbox[3] - label_bbox[1]
         draw.text(
-            (x + (HALF_W - label_w) / 2, y + HALF_H / 2 - label_h),
+            (x + (w - label_w) / 2, y + h / 2 - label_h),
             image_text,
             font=title_font,
             fill=(255, 255, 255),
@@ -72,7 +82,7 @@ def build_image() -> bytes:
         desc_bbox = draw.textbbox((0, 0), desc, font=desc_font)
         desc_w = desc_bbox[2] - desc_bbox[0]
         draw.text(
-            (x + (HALF_W - desc_w) / 2, y + HALF_H / 2 + 40),
+            (x + (w - desc_w) / 2, y + h / 2 + 40),
             desc,
             font=desc_font,
             fill=(255, 255, 255),
@@ -95,15 +105,14 @@ def main():
             print(f"已刪除舊選單：{rm.rich_menu_id}")
 
     areas = []
-    positions = [(0, 0), (HALF_W, 0), (0, HALF_H), (HALF_W, HALF_H)]
-    for (x, y), (label, _image_text, _desc, _color, data) in zip(positions, CELLS):
+    for (x, y, w, h), (label, _image_text, _desc, _color, data) in zip(BOUNDS, CELLS):
         if data is None:
             action = URIAction(label=label[:20], uri=build_carbon_footprint_url())
         else:
             action = PostbackAction(label=label[:20], data=data, display_text=label)
         areas.append(
             RichMenuArea(
-                bounds=RichMenuBounds(x=x, y=y, width=HALF_W, height=HALF_H),
+                bounds=RichMenuBounds(x=x, y=y, width=w, height=h),
                 action=action,
             )
         )
