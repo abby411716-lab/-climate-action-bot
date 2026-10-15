@@ -2,7 +2,21 @@
 
 依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援、前測/中測/後測成效評估問卷（LIFF 表單）、碳足跡打卡計算器（LIFF 表單，算出「綠色分數」），以及教師後台網頁（總覽／學生列表與個別學生頁／題目分析／成效總覽／碳足跡／打卡審核）。
 
-## 目前進度快照（2026-10-11）
+## 目前進度快照（2026-10-15）
+
+**10/14～10/15 變更摘要**
+- ✅ 新增**補做題目**（`app/makeup.py`）：推送日之後才作答的題目能量減半（答對 +5、答錯 +1）。學生點選單「補做題目」或打字「補做」，機器人出最舊的一題漏答題目，用回覆訊息出題不耗額度，答完還有漏答會附「繼續補做」按鈕
+- ✅ 教師後台「提醒」頁的名單會顯示每位學生「補做 N 題」，提醒訊息也會請學生去補做
+- ✅ LINE 選單上排改成 3 格：基本資料／目前狀態／補做題目（`scripts/setup_rich_menu.py`）
+- ⚠️ 10/14 推送 commit `fdf8af5` 時 Render 剛好故障，自動部署沒有跑。10/15 從 Render 後台手動部署（Manual Deploy）後上線，`/health` 回 200，部署後 log 沒有錯誤
+
+- ✅ 部署上線後重跑 `python -m scripts.setup_rich_menu`，新選單（`richmenu-125e7ee460016fbc168717c2c1388ce9`）已設為所有好友的預設選單
+
+**⏭️ 下次先做這些事（10/15 新增）**
+1. 用自己的 LINE 實測：選單有「補做題目」按鈕，點下去會出漏答的題目，答對拿 +5，答完還有漏答會附「繼續補做」按鈕（舊選單可能要重開聊天室才會換掉）
+2. 到 Render 後台 Settings 確認 Auto-Deploy 還開著（這次 push 沒有自動部署，應該是 Render 故障造成的）
+
+## 先前進度快照（2026-10-11）
 
 **10/11 變更摘要**
 - ✅ 刪除 7 筆碳足跡 LIFF 放錯 Provider 時產生的分身學生（student_id 10、11、14、15、19、21、22，連同各自 1 筆 `carbon_footprint_responses`）：都沒暱稱、LINE 名稱查不到、沒有答題／打卡／問卷紀錄。刪除前再確認一次 LINE 仍查不到才刪，整批在同一個交易裡完成；刪完 Neon 剩 26 位學生，LINE 名稱全部查得到。碳足跡頁的統計因此少 7 筆
@@ -125,9 +139,10 @@ uvicorn app.main:app --reload
 
 ## Rich Menu ＋ 暱稱 ＋ 環保打卡 ＋ 排行榜
 
-- `python -m scripts.setup_rich_menu`：產生一張 2500x1686 的選單圖片（上排 3 格：基本資料／目前狀態／補做題目，下排 2 格：環保打卡／排行榜）（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。三個按鈕是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理；`環保打卡` 這格改用 URIAction，點下去不經過 webhook，直接開啟碳足跡打卡計算器的 LIFF（`app/carbon_footprint.build_carbon_footprint_url()`，見下方「碳足跡打卡計算器」一節）：
+- `python -m scripts.setup_rich_menu`：產生一張 2500x1686 的選單圖片（上排 3 格：基本資料／目前狀態／補做題目，下排 2 格：環保打卡／排行榜）（`Pillow` 畫的，用 Windows 內建的微軟正黑體 `msjh.ttc`），建立 LINE Rich Menu、上傳圖片、設成所有好友的預設選單。重複執行會先刪除同名舊選單再建新的，之後要改文案/版面直接改 `scripts/setup_rich_menu.py` 的 `CELLS` 重跑即可。五個按鈕都是 `menu|xxx` 格式的 PostbackAction，由 `app/routers/webhook.py` 的 `_handle_menu_postback` 處理（`CELLS` 裡 postback data 填 `None` 的格子才會改用 URIAction 直接開網址，目前沒有這種格子）：
   - `基本資料`：回覆就讀學校
   - `目前狀態`：回覆身分／能量／連續天數／徽章（跟文字訊息查詢共用 `_status_text`）
+  - `補做題目`（postback `menu|makeup`）：出最舊的一題漏答題目，見下方「教師後台」一節的「補做題目」說明（2026/10/15 新增）
   - `環保打卡`（postback `menu|eco`，`webhook._eco_menu_message`）：還沒算過碳足跡的學生回覆一顆「開始計算」按鈕開啟碳足跡計算器 LIFF；算過之後改回覆拍照打卡說明，附「拍照」「從相簿選」快速按鈕，並附重新計算碳足跡的連結（2026/10/2 前是 URIAction 直接開計算器）
   - `排行榜`：回覆全體學生前 10 名（暱稱＋能量），不分學校（2026/10/11 前是只排同校）
 - 暱稱設定：學生選完學校後，下一則文字訊息會被當成暱稱存起來（`students.nickname`），設定前選單功能會提示要先設定暱稱。暱稱只存在我們資料庫，跟 LINE 顯示名稱無關，目的是排行榜不曝露 LINE 身份。
