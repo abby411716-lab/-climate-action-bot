@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app import assessment_questions, carbon_footprint, crud, eco_checkin, game_rules, reminders, teacher_dashboard
-from app.assessment import broadcast_assessment_invite
+from app.assessment import list_incomplete_students, push_assessment_to_incomplete
 from app.carbon_footprint import broadcast_carbon_footprint_invite
 from app.config import settings
 from app.database import get_db
@@ -211,25 +211,42 @@ def questions_analysis(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/assessment")
-def assessment_overview(request: Request, sent: str | None = None, db: Session = Depends(get_db)):
+def assessment_overview(
+    request: Request,
+    sent: str | None = None,
+    ok: int | None = None,
+    failed: int | None = None,
+    db: Session = Depends(get_db),
+):
     if resp := require_teacher(request):
         return resp
     rounds = [teacher_dashboard.assessment_round_stats(db, r) for r in assessment_questions.ROUNDS]
     sent_label = assessment_questions.ROUND_LABELS.get(sent) if sent else None
+    incomplete_counts = {r: len(list_incomplete_students(db, r)) for r in assessment_questions.ROUNDS}
     return templates.TemplateResponse(
         "teacher/assessment.html",
-        {"request": request, "active": "assessment", "rounds": rounds, "sent_label": sent_label},
+        {
+            "request": request,
+            "active": "assessment",
+            "rounds": rounds,
+            "sent_label": sent_label,
+            "sent_ok": ok,
+            "sent_failed": failed,
+            "incomplete_counts": incomplete_counts,
+        },
     )
 
 
 @router.post("/assessment/push")
-def assessment_push(request: Request, assessment_round: str = Form(...)):
+def assessment_push(request: Request, assessment_round: str = Form(...), db: Session = Depends(get_db)):
     if resp := require_teacher(request):
         return resp
     if assessment_round not in assessment_questions.ROUNDS:
         raise HTTPException(status_code=400, detail="round 必須是 baseline / midterm / posttest")
-    broadcast_assessment_invite(assessment_round)
-    return RedirectResponse(url=f"/teacher/assessment?sent={assessment_round}", status_code=303)
+    ok, failed = push_assessment_to_incomplete(db, assessment_round)
+    return RedirectResponse(
+        url=f"/teacher/assessment?sent={assessment_round}&ok={ok}&failed={failed}", status_code=303
+    )
 
 
 @router.get("/carbon-footprint")
