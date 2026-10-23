@@ -53,7 +53,13 @@ def get_student_by_id(db: Session, student_id: int) -> models.Student | None:
 
 def delete_student(db: Session, student: models.Student) -> None:
     """刪掉學生和他所有的作答、打卡、問卷、碳足跡紀錄（外鍵沒設 cascade，要先刪子表）。"""
-    for model in (models.AnswerLog, models.EcoCheckin, models.AssessmentResponse, models.CarbonFootprintResponse):
+    for model in (
+        models.AnswerLog,
+        models.EcoCheckin,
+        models.AssessmentResponse,
+        models.CarbonFootprintResponse,
+        models.CarbonFootprintHistory,
+    ):
         db.query(model).filter(model.student_id == student.student_id).delete(synchronize_session=False)
     db.delete(student)
     db.commit()
@@ -336,6 +342,14 @@ def list_carbon_footprint_responses(db: Session) -> list[models.CarbonFootprintR
     )
 
 
+def list_carbon_footprint_history(db: Session, student_id: int | None = None) -> list[models.CarbonFootprintHistory]:
+    """碳足跡每次送出的紀錄，由舊到新。"""
+    query = db.query(models.CarbonFootprintHistory)
+    if student_id is not None:
+        query = query.filter(models.CarbonFootprintHistory.student_id == student_id)
+    return query.order_by(models.CarbonFootprintHistory.submitted_at, models.CarbonFootprintHistory.history_id).all()
+
+
 def upsert_carbon_footprint_response(
     db: Session,
     student: models.Student,
@@ -345,7 +359,17 @@ def upsert_carbon_footprint_response(
     max_score: int,
     green_score: int,
 ) -> tuple[models.CarbonFootprintResponse, bool]:
-    """新增或覆蓋這位學生的碳足跡計算結果。回傳 (record, is_first_time)，is_first_time 給呼叫端判斷要不要發獎勵。"""
+    """新增或覆蓋這位學生的碳足跡計算結果，並在 carbon_footprint_history 多記一筆。
+    回傳 (record, is_first_time)，is_first_time 給呼叫端判斷要不要發獎勵。"""
+    db.add(
+        models.CarbonFootprintHistory(
+            student_id=student.student_id,
+            responses=responses,
+            total_score=total_score,
+            max_score=max_score,
+            green_score=green_score,
+        )
+    )
     existing = get_carbon_footprint_response(db, student.student_id)
     if existing:
         existing.responses = responses

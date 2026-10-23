@@ -77,6 +77,11 @@
     {{ carbon_result.level_flavor }}<br>
     最後更新：{{ carbon_result.updated_at.strftime('%Y-%m-%d %H:%M') }}
   </p>
+  {% if carbon_result.history|length >= 2 %}
+  <p class="meta" style="margin:0 0 10px;">
+    歷次分數：{% for h in carbon_result.history %}{{ h.green_score }}（{{ h.submitted_at.strftime('%m/%d') }}）{% if not loop.last %} → {% endif %}{% endfor %}
+  </p>
+  {% endif %}
   <table>
     <tbody>
     {% for a in carbon_result.answers %}

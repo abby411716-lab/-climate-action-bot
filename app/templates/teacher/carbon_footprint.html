@@ -6,6 +6,31 @@
   <p style="margin:0; color:#1f5c2b; font-weight:600;">✅ 已廣播碳足跡打卡計算器連結給所有 LINE 好友</p>
 </div>
 {% endif %}
+{% if retake_ok is not none %}
+<div class="card" style="background:#eef7ee;">
+  <p style="margin:0; color:#1f5c2b; font-weight:600;">✅ 已發送重新計算邀請：成功 {{ retake_ok }} 人{% if retake_failed %}，失敗 {{ retake_failed }} 人（可能封鎖了官方帳號或本月額度用完）{% endif %}</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>前後對比（第一次 vs 最新一次）</h2>
+  <p class="meta" style="margin:0 0 14px;">只算填過兩次以上的學生。2026/10/24 前就重填過的學生，更早的分數已被覆蓋，「第一次」是指 10/24 當時的分數。</p>
+  {% if comparison %}
+  <div class="stat-grid">
+    <div class="stat-box"><div class="num">{{ comparison.count }}</div><div class="label">有前後對比的人數</div></div>
+    <div class="stat-box"><div class="num">{{ comparison.avg_first }} → {{ comparison.avg_latest }}</div><div class="label">平均綠色分數</div></div>
+    <div class="stat-box"><div class="num">{% if comparison.avg_change > 0 %}+{% endif %}{{ comparison.avg_change }}{% if comparison.change_pct is not none %}（{% if comparison.change_pct > 0 %}+{% endif %}{{ comparison.change_pct }}%）{% endif %}</div><div class="label">平均變化</div></div>
+    <div class="stat-box"><div class="num">{{ comparison.improved }} / {{ comparison.same }} / {{ comparison.declined }}</div><div class="label">進步／持平／退步人數</div></div>
+  </div>
+  {% else %}
+  <div class="empty">還沒有學生填第二次</div>
+  {% endif %}
+  <p class="meta" style="margin:16px 0 10px;">按下按鈕會用 LINE Push 只發給「填過、但只填過一次」的 {{ retake_invite_count }} 位學生，請他們依最近的生活習慣重新計算（一人算 1 則訊息額度，重填不會再發能量）。</p>
+  <form method="post" action="/teacher/carbon-footprint/retake"
+        onsubmit="return confirm('確定要發送重新計算邀請給 {{ retake_invite_count }} 位學生嗎？這個動作會立即發送，無法收回。');">
+    <button type="submit" class="btn btn-approve" style="padding: 9px 18px;" {% if not retake_invite_count %}disabled{% endif %}>邀請重新計算（{{ retake_invite_count }} 人）</button>
+  </form>
+</div>
 
 <div class="card">
   <h2>發送計算器連結</h2>
@@ -38,7 +63,7 @@
   <h2>學生結果（依分數排序）</h2>
   {% if rows %}
   <table>
-    <thead><tr><th>暱稱</th><th>綠色分數</th><th>等級</th><th>最後更新</th></tr></thead>
+    <thead><tr><th>暱稱</th><th>綠色分數</th><th>等級</th><th>第一次</th><th>變化</th><th>填寫次數</th><th>最後更新</th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
@@ -49,6 +74,9 @@
         </td>
         <td>{{ row.green_score }}</td>
         <td>{{ row.level_name }}</td>
+        <td>{% if row.first_score is not none %}{{ row.first_score }}{% else %}—{% endif %}</td>
+        <td>{% if row.change is none %}—{% elif row.change > 0 %}<span style="color:#2f7a3f;">+{{ row.change }}</span>{% elif row.change < 0 %}<span style="color:#b3261e;">{{ row.change }}</span>{% else %}0{% endif %}</td>
+        <td>{{ row.times }}</td>
         <td>{{ row.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
       </tr>
     {% endfor %}

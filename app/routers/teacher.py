@@ -151,6 +151,7 @@ def student_detail(request: Request, student_id: int, db: Session = Depends(get_
             "level_flavor": level_flavor,
             "updated_at": carbon_response.updated_at,
             "answers": teacher_dashboard.describe_carbon_footprint_response(carbon_response),
+            "history": crud.list_carbon_footprint_history(db, student_id),
         }
 
     return templates.TemplateResponse(
@@ -250,13 +251,36 @@ def assessment_push(request: Request, assessment_round: str = Form(...), db: Ses
 
 
 @router.get("/carbon-footprint")
-def carbon_footprint_page(request: Request, sent: str | None = None, db: Session = Depends(get_db)):
+def carbon_footprint_page(
+    request: Request,
+    sent: str | None = None,
+    retake_ok: int | None = None,
+    retake_failed: int | None = None,
+    db: Session = Depends(get_db),
+):
     if resp := require_teacher(request):
         return resp
     stats = teacher_dashboard.carbon_footprint_stats(db)
     return templates.TemplateResponse(
         "teacher/carbon_footprint.html",
-        {"request": request, "active": "carbon", "sent": bool(sent), **stats},
+        {
+            "request": request,
+            "active": "carbon",
+            "sent": bool(sent),
+            "retake_ok": retake_ok,
+            "retake_failed": retake_failed,
+            **stats,
+        },
+    )
+
+
+@router.post("/carbon-footprint/retake")
+def carbon_footprint_retake(request: Request, db: Session = Depends(get_db)):
+    if resp := require_teacher(request):
+        return resp
+    ok, failed = carbon_footprint.push_retake_invite(db)
+    return RedirectResponse(
+        url=f"/teacher/carbon-footprint?retake_ok={ok}&retake_failed={failed}", status_code=303
     )
 
 

@@ -116,11 +116,17 @@ def assessment_round_stats(db: Session, assessment_round: str) -> dict:
 def carbon_footprint_stats(db: Session) -> dict:
     responses = crud.list_carbon_footprint_responses(db)
 
+    history_by_student: dict[int, list[models.CarbonFootprintHistory]] = {}
+    for h in crud.list_carbon_footprint_history(db):
+        history_by_student.setdefault(h.student_id, []).append(h)
+
     level_counts: dict[str, int] = {}
     rows = []
     for r in responses:
         level_name, _flavor = carbon_footprint.current_level(r.green_score)
         level_counts[level_name] = level_counts.get(level_name, 0) + 1
+        history = history_by_student.get(r.student_id, [])
+        first_score = history[0].green_score if history else None
         rows.append(
             {
                 "student": crud.get_student_by_id(db, r.student_id),
@@ -128,15 +134,38 @@ def carbon_footprint_stats(db: Session) -> dict:
                 "level_name": level_name,
                 "submitted_at": r.submitted_at,
                 "updated_at": r.updated_at,
+                "first_score": first_score,
+                "times": len(history),
+                # 只填過一次就沒有前後可比
+                "change": r.green_score - first_score if len(history) >= 2 else None,
             }
         )
     rows.sort(key=lambda row: row["green_score"], reverse=True)
+
+    # 前後對比：只算填過兩次以上的學生（同一批人比第一次和最新一次）
+    paired = [row for row in rows if row["change"] is not None]
+    comparison = None
+    if paired:
+        avg_first = sum(row["first_score"] for row in paired) / len(paired)
+        avg_latest = sum(row["green_score"] for row in paired) / len(paired)
+        comparison = {
+            "count": len(paired),
+            "avg_first": round(avg_first, 1),
+            "avg_latest": round(avg_latest, 1),
+            "avg_change": round(avg_latest - avg_first, 1),
+            "change_pct": round((avg_latest - avg_first) / avg_first * 100, 1) if avg_first else None,
+            "improved": sum(1 for row in paired if row["change"] > 0),
+            "same": sum(1 for row in paired if row["change"] == 0),
+            "declined": sum(1 for row in paired if row["change"] < 0),
+        }
 
     return {
         "response_count": len(responses),
         "avg_score": round(sum(r.green_score for r in responses) / len(responses), 1) if responses else None,
         "level_counts": level_counts,
         "rows": rows,
+        "comparison": comparison,
+        "retake_invite_count": sum(1 for row in rows if row["times"] < 2),
     }
 
 

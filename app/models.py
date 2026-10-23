@@ -158,3 +158,22 @@ class CarbonFootprintResponse(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     student: Mapped["Student"] = relationship(back_populates="carbon_footprint_response")
+
+
+class CarbonFootprintHistory(Base):
+    """碳足跡計算器每一次送出的紀錄（CarbonFootprintResponse 只留最新一筆，這裡全部保留），
+    用來比較同一位學生「第一次 vs 最新一次」的綠色分數。
+
+    2026/10/24 才新增，migration 會把當時 carbon_footprint_responses 裡的每一筆複製一份進來當第一筆
+    （時間用 updated_at）；在那之前就重填過的學生，更早的分數已經被覆蓋掉，找不回來。
+    """
+
+    __tablename__ = "carbon_footprint_history"
+
+    history_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.student_id"), index=True, nullable=False)
+    responses: Mapped[dict] = mapped_column(JSON, nullable=False)
+    total_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    green_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

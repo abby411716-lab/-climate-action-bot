@@ -11,14 +11,17 @@
 決定要顯示哪種表單。
 """
 
+import logging
 from typing import Any
 
-from linebot.v3.messaging import BroadcastRequest, TextMessage
+from linebot.v3.messaging import BroadcastRequest, PushMessageRequest, TextMessage
 from sqlalchemy.orm import Session
 
 from app import crud, game_rules, models
 from app.config import settings
 from app.line_client import get_messaging_api
+
+logger = logging.getLogger("carbon_footprint")
 
 LIFF_BASE_URL = "https://liff.line.me"
 
@@ -186,3 +189,33 @@ def broadcast_carbon_footprint_invite() -> None:
     )
     api = get_messaging_api()
     api.broadcast(BroadcastRequest(messages=[TextMessage(text=text)]))
+
+
+def push_retake_invite(db: Session) -> tuple[int, int]:
+    """邀請「填過、但只填過一次」的學生重新計算，做出第一次 vs 最新一次的前後對比。
+    逐一 push（一人算 1 則額度），回傳 (成功人數, 失敗人數)。"""
+    history_counts: dict[int, int] = {}
+    for h in crud.list_carbon_footprint_history(db):
+        history_counts[h.student_id] = history_counts.get(h.student_id, 0) + 1
+
+    url = build_carbon_footprint_url()
+    api = get_messaging_api()
+    sent, failed = 0, 0
+    for r in crud.list_carbon_footprint_responses(db):
+        if history_counts.get(r.student_id, 0) >= 2:
+            continue
+        student = crud.get_student_by_id(db, r.student_id)
+        text = (
+            "🌍 這個月快結束了！再算一次你的碳足跡吧\n\n"
+            f"你上次的綠色分數是 {r.green_score} 分。經過這一個月的知識卡和環保行動，"
+            "照「最近」的生活習慣重新填一次，看看自己有沒有進步 💪\n\n"
+            f"{url}"
+        )
+        try:
+            api.push_message(PushMessageRequest(to=student.line_user_id, messages=[TextMessage(text=text)]))
+            sent += 1
+        except Exception:
+            logger.exception("重新計算邀請發送失敗 student_id=%s", r.student_id)
+            failed += 1
+    logger.info("重新計算邀請發送完成：成功 %s 人，失敗 %s 人", sent, failed)
+    return sent, failed

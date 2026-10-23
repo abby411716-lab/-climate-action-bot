@@ -2,7 +2,19 @@
 
 依照《氣候行動完整功能規格書 v2》建立，目前完成規格書第 10 節「建議推進順序」第 1～2 步：資料庫 schema ＋ LINE webhook 基本收發（含 school 參數判斷），以及每日推送＋答題＋積分/streak/徽章核心邏輯。另外額外做了 Rich Menu（基本資料／目前狀態／環保打卡／排行榜）、暱稱設定、拍照打卡送能量（老師審核制）、Alembic schema migration、GitHub Actions 排程備援、前測/中測/後測成效評估問卷（LIFF 表單）、碳足跡打卡計算器（LIFF 表單，算出「綠色分數」），以及教師後台網頁（總覽／學生列表與個別學生頁／題目分析／成效總覽／碳足跡／打卡審核）。
 
-## 目前進度快照（2026-10-15）
+## 目前進度快照（2026-10-24）
+
+**10/24 變更摘要**
+- ✅ 碳足跡計算器新增**歷史紀錄**（新表 `carbon_footprint_history`，migration `d7b3e9a1c5f2`）：學生每次送出都記一筆，`carbon_footprint_responses` 仍只留最新一筆。migration 會把當時 18 筆結果各複製一份當第一筆（時間用 `updated_at`）。10/24 前就重填過的 6 位學生（student_id 4、5、9、13、18、34），更早的分數已被覆蓋找不回來，他們的「第一次」是 10/24 當時的分數
+- ✅ 教師後台「碳足跡」頁新增「前後對比」區塊：只算填過兩次以上的學生，顯示第一次 vs 最新一次的平均綠色分數、平均變化、進步／持平／退步人數；學生列表多了「第一次／變化／填寫次數」欄。個別學生頁填過兩次以上會列出歷次分數
+- ✅ 「邀請重新計算」按鈕（`POST /teacher/carbon-footprint/retake`，`carbon_footprint.push_retake_invite`）：只 push 給填過、但只填過一次的學生，訊息附上他上次的分數，一人算 1 則額度
+- ✅ 刪除學生時一併刪掉 `carbon_footprint_history`
+
+**⏭️ 下次先做這些事（10/24 新增）**
+1. 部署後到教師後台「碳足跡」頁確認前後對比區塊出現、填寫次數都是 1
+2. 最後一週（建議 10/27～10/29）按「邀請重新計算」，10/31 前看前後對比結果，寫進成果報告的量化效益
+
+## 先前進度快照（2026-10-15）
 
 **10/14～10/15 變更摘要**
 - ✅ 新增**補做題目**（`app/makeup.py`）：推送日之後才作答的題目能量減半（答對 +5、答錯 +1）。學生點選單「補做題目」或打字「補做」，機器人出最舊的一題漏答題目，用回覆訊息出題不耗額度，答完還有漏答會附「繼續補做」按鈕
@@ -217,7 +229,7 @@ Body: {"school_name": "南投高中", "join_link_code": "nantou_high"}
 - `app/carbon_footprint.py`：題目定義（`QUESTIONS`，含每個選項的分數）、算分邏輯（`score_answers` / `green_score` / `current_level`）、首次完成的獎勵邏輯（`award_first_completion`）都集中在這裡
 - **獨立的 LIFF App／Endpoint URL**：跟成效問卷放在同一個 LINE Login channel（「負碳褶學」Provider 底下的負碳哲學 channel）的另一個 LIFF App，LIFF ID 存在 `.env` 的 `CARBON_LIFF_ID`（`2011196878-7T5lmNHh`），對應 `GET /liff/carbon-footprint`。**LIFF 一定要跟機器人的 Messaging API channel 在同一個 Provider**：LINE 給的 userId 是依 Provider 分開的。2026/10/2 前碳足跡用的是另一個 Provider（「碳足跡計算器liff」）的 LIFF（`2011280445-r8e78Taj`），學生填表後系統對不到他原本的帳號，替他多建了一筆沒暱稱的分身（碳足跡分數和能量記在分身上，機器人也傳不了訊息給分身）。舊 LIFF 的 Endpoint URL 改指到 `/liff/carbon-footprint-moved`，只顯示「請改從選單的『環保打卡』進入」，不能再填寫。Endpoint URL 正式環境固定要設成 `https://climate-action-bot.onrender.com/liff/carbon-footprint`；只有開發者要在自己電腦上先測試表單改動時，才需要暫時改成本機的 ngrok/cloudflared tunnel 網址，測完務必改回 Render 網址。跟成效評估問卷（`/liff/assessment`、`LIFF_ID`）是兩個完全分開的 LIFF App，改任一邊的 Endpoint URL 都不會影響另一邊。頁面模板仍共用 `app/templates/assessment.html` 這個殼子，但不再靠網址 query string 分流，而是伺服器端渲染時直接傳入 `mode`（`"assessment"` 或 `"carbon_footprint"`），前端 JS 讀這個值決定要打 `/liff/carbon-footprint/questions` 還是 `/liff/assessment/questions`，畫面也會改成算分結果（分數圓圈＋等級＋首次完成的獎勵提示）而不是單純的「已送出」訊息
 - 身份驗證方式跟成效評估問卷完全一樣：後端用 access token 換驗證過的 LINE `userId`，不信任前端回報的任何身份欄位
-- **可以重複填寫**：`crud.upsert_carbon_footprint_response` 每位學生只留一筆最新結果，重填會覆蓋分數重新計算；但只有**第一次**送出才會發能量（`game_rules.CARBON_CALC_POINTS`，目前 20）、解鎖「🧮 碳足跡先鋒」徽章，重填不會重複發獎勵
+- **可以重複填寫**：`crud.upsert_carbon_footprint_response` 每位學生只留一筆最新結果，重填會覆蓋分數重新計算（每次送出另外記在 `carbon_footprint_history`，給教師後台做前後對比，2026/10/24 新增）；但只有**第一次**送出才會發能量（`game_rules.CARBON_CALC_POINTS`，目前 20）、解鎖「🧮 碳足跡先鋒」徽章，重填不會重複發獎勵
 - 推播計算器連結：`POST /admin/push-carbon-footprint`（帶 `X-Admin-Key`）廣播給所有好友，教師後台「碳足跡」頁面（`/teacher/carbon-footprint`）也有對應按鈕，不用開終端機
 - 老師可以在教師後台「碳足跡」頁面看整體平均分數／各等級人數分布／全部學生的分數列表，或在個別學生頁看單一學生的逐題作答內容
 - **已在真實 LINE 裝置上完整測試過**（第一次送出正確發能量+解鎖徽章、重新填寫正確只更新分數不重複發獎勵），已部署到 Render 正式環境
